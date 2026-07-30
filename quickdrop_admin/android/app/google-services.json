@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "384305289905",
+    "project_id": "quickdrop-cbf49",
+    "storage_bucket": "quickdrop-cbf49.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:384305289905:android:aed26de6ccdae55fad6090",
+        "android_client_info": {
+          "package_name": "com.example.quickdrop"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

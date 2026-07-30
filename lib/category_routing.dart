@@ -1,0 +1,610 @@
+const List<String> grocerySubcategories = [
+  'Atta, Rice & Dal',
+  'Oil, Ghee & Masala',
+  'Fruits & Vegetables',
+  'Dairy & Eggs',
+  'Bakery & Biscuits',
+  'Dry Fruits & Cereals',
+  'Chicken, Meat & Fish',
+  'Kitchenware',
+  'Chips & Namkeen',
+  'Sweets & Chocolates',
+  'Drinks & Juices',
+  'Tea, Coffee & Milk',
+  'Instant Food',
+  'Sauces & Spreads',
+  'Ice Creams',
+];
+
+const List<String> foodSubcategories = [
+  'Pizza',
+  'Burger',
+  'Biryani',
+  'Chinese',
+  'Rolls',
+  'Beverages',
+];
+
+const List<String> giftSubcategories = [
+  'Birthday',
+  'Anniversary',
+  'Flowers',
+  'Teddy',
+  'Cakes',
+  'Chocolates',
+  'Surprise Box',
+];
+
+const List<String> beautySubcategories = [
+  'Bath & Body',
+  'Hair Care',
+  'Skin Care',
+  'Cosmetics',
+  'Baby Care',
+  'Health',
+];
+
+const List<String> electronicsSubcategories = [
+  'Mobile Accessories',
+  'Chargers',
+  'Earphones',
+  'Power Banks',
+  'Smart Gadgets',
+];
+
+const List<String> householdSubcategories = [
+  'Cleaning',
+  'Laundry',
+  'Kitchen Essentials',
+  'Home Decor',
+  'Storage',
+];
+
+const List<String> petSubcategories = [
+  'Food',
+  'Toys',
+  'Grooming',
+  'Healthcare',
+  'Accessories',
+];
+
+const List<String> partySubcategories = [
+  'Decor',
+  'Candles',
+  'Balloons',
+  'Tableware',
+  'Cake Accessories',
+];
+
+const List<String> printSubcategories = [
+  'Documents',
+  'Photos',
+  'Cards',
+  'Stickers',
+  'Banners',
+];
+
+const Map<String, List<String>> categorySubcategoryMap = {
+  'Grocery': grocerySubcategories,
+  'Food': foodSubcategories,
+  'Gifts': giftSubcategories,
+  'Beauty & Personal Care': beautySubcategories,
+  'Electronics': electronicsSubcategories,
+  'Household Essentials': householdSubcategories,
+  'Pet Store': petSubcategories,
+  'Party Store': partySubcategories,
+  'Print Store': printSubcategories,
+};
+
+const Map<String, List<String>> subcategoryChildCategoryMap = {
+  'Atta, Rice & Dal': [
+    'Atta',
+    'Rice',
+    'Dal',
+    'Flours',
+  ],
+  'Oil, Ghee & Masala': [
+    'Cooking Oils',
+    'Ghee',
+    'Whole Spices',
+    'Blended Masala',
+  ],
+  'Fruits & Vegetables': [
+    'Fresh Fruits',
+    'Fresh Vegetables',
+    'Leafy Greens',
+    'Cut & Packed',
+  ],
+  'Dairy, Bread & Eggs': [
+    'Milk',
+    'Bread & Pav',
+    'Eggs',
+    'Curd & Yogurt',
+    'Cheese & Butter',
+    'Batter',
+    'Paneer & Tofu',
+    'Soy Milk & More',
+    'Lassi & Milkshakes',
+    'Cream & Whitener',
+  ],
+  'Dairy & Eggs': [
+    'Milk',
+    'Bread & Pav',
+    'Eggs',
+    'Curd & Yogurt',
+    'Cheese & Butter',
+    'Batter',
+    'Paneer & Tofu',
+    'Soy Milk & More',
+    'Lassi & Milkshakes',
+    'Cream & Whitener',
+  ],
+  'Bakery & Biscuits': [
+    'Biscuits',
+    'Cookies',
+    'Cakes & Pastries',
+    'Breads',
+  ],
+  'Dry Fruits & Cereals': [
+    'Dry Fruits',
+    'Nuts & Seeds',
+    'Breakfast Cereals',
+    'Muesli & Oats',
+  ],
+  'Chicken, Meat & Fish': [
+    'Chicken',
+    'Mutton',
+    'Fish',
+    'Ready to Cook',
+  ],
+  'Kitchenware': [
+    'Cookware',
+    'Storage Containers',
+    'Utensils',
+    'Cleaning Tools',
+  ],
+  'Chips & Namkeen': [
+    'Potato Chips',
+    'Namkeen Mixes',
+    'Bhujia & Sev',
+    'Roasted Snacks',
+  ],
+  'Sweets & Chocolates': [
+    'Indian Sweets',
+    'Chocolate Bars',
+    'Gift Packs',
+    'Sugar-Free Sweets',
+  ],
+  'Drinks & Juices': [
+    'Fruit Juices',
+    'Soft Drinks',
+    'Energy Drinks',
+    'Flavored Water',
+  ],
+  'Tea, Coffee & Milk': [
+    'Tea',
+    'Coffee',
+    'Milk Drinks',
+    'Premixes',
+  ],
+  'Instant Food': [
+    'Noodles & Pasta',
+    'Ready Meals',
+    'Soup Mixes',
+    'Frozen Snacks',
+  ],
+  'Sauces & Spreads': [
+    'Ketchup & Sauces',
+    'Mayonnaise',
+    'Jams & Spreads',
+    'Dips',
+  ],
+  'Ice Creams': [
+    'Cups & Cones',
+    'Family Packs',
+    'Kulfi',
+    'Frozen Desserts',
+  ],
+  'Restaurant Food': [
+    'North Indian',
+    'South Indian',
+    'Combo Meals',
+    'Thali',
+  ],
+  'Fast Food': [
+    'Burgers',
+    'Fries',
+    'Sandwiches',
+    'Wraps',
+  ],
+  'Pizza': [
+    'Veg Pizza',
+    'Non-Veg Pizza',
+    'Cheese Burst',
+    'Pizza Combos',
+  ],
+  'Burger': [
+    'Veg Burger',
+    'Chicken Burger',
+    'Double Patty',
+    'Burger Combos',
+  ],
+  'Biryani': [
+    'Chicken Biryani',
+    'Mutton Biryani',
+    'Veg Biryani',
+    'Family Packs',
+  ],
+  'Chinese': [
+    'Noodles',
+    'Fried Rice',
+    'Manchurian',
+    'Combo Boxes',
+  ],
+  'Rolls': [
+    'Egg Rolls',
+    'Chicken Rolls',
+    'Paneer Rolls',
+    'Kathi Rolls',
+  ],
+  'Beverages': [
+    'Cold Beverages',
+    'Hot Beverages',
+    'Shakes',
+    'Mocktails',
+  ],
+  'Sweets': [
+    'Rasgulla',
+    'Gulab Jamun',
+    'Kheer',
+    'Halwa',
+  ],
+  'Birthday': [
+    'Birthday Cakes',
+    'Birthday Flowers',
+    'Birthday Hampers',
+    'Personalized Gifts',
+  ],
+  'Anniversary': [
+    'Anniversary Cakes',
+    'Bouquets',
+    'Romantic Gift Sets',
+    'Custom Keepsakes',
+  ],
+  'Flowers': [
+    'Roses',
+    'Mixed Bouquets',
+    'Orchids',
+    'Flower Baskets',
+  ],
+  'Teddy': [
+    'Small Teddy',
+    'Medium Teddy',
+    'Large Teddy',
+    'Teddy Combos',
+  ],
+  'Cakes': [
+    'Eggless Cakes',
+    'Chocolate Cakes',
+    'Designer Cakes',
+    'Photo Cakes',
+  ],
+  'Chocolates': [
+    'Chocolate Boxes',
+    'Premium Chocolates',
+    'Assorted Packs',
+    'Chocolate Bouquets',
+  ],
+  'Surprise Box': [
+    'Mini Surprise Box',
+    'Premium Surprise Box',
+    'Custom Surprise Box',
+    'Couple Surprise Box',
+  ],
+  'Soft Toys': [
+    'Small Soft Toys',
+    'Character Toys',
+    'Heart Cushions',
+    'Combo Packs',
+  ],
+  'Gift Combos': [
+    'Cake + Flowers',
+    'Chocolate + Teddy',
+    'Perfume + Card',
+    'Custom Combo',
+  ],
+  'Surprise your loved ones': [
+    'Midnight Surprise',
+    'Romantic Surprise',
+    'Birthday Surprise',
+    'Custom Surprise',
+  ],
+  'Bath & Body': [
+    'Body Wash',
+    'Soaps',
+    'Body Lotion',
+    'Body Scrub',
+  ],
+  'Hair Care': [
+    'Shampoo',
+    'Conditioner',
+    'Hair Oil',
+    'Hair Serum',
+  ],
+  'Skin Care': [
+    'Face Wash',
+    'Moisturizer',
+    'Sunscreen',
+    'Face Masks',
+  ],
+  'Cosmetics': [
+    'Lipsticks',
+    'Foundations',
+    'Kajal & Eyeliner',
+    'Makeup Kits',
+  ],
+  'Beauty Products': [
+    'Makeup',
+    'Skincare Essentials',
+    'Fragrances',
+    'Nail Care',
+  ],
+  'Baby Care': [
+    'Baby Lotion',
+    'Baby Powder',
+    'Baby Wipes',
+    'Baby Shampoo',
+  ],
+  'Health': [
+    'Supplements',
+    'First Aid',
+    'Personal Hygiene',
+    'Wellness Products',
+  ],
+  'Mobile Accessories': [
+    'Mobile Covers',
+    'Screen Guards',
+    'Holders & Mounts',
+    'Data Cables',
+  ],
+  'Chargers': [
+    'Fast Chargers',
+    'Type-C Chargers',
+    'Wireless Chargers',
+    'Car Chargers',
+  ],
+  'Earphones': [
+    'Wired Earphones',
+    'Bluetooth Earbuds',
+    'Neckbands',
+    'Gaming Earphones',
+  ],
+  'Power Banks': [
+    '10000 mAh',
+    '20000 mAh',
+    'Fast Charge Power Banks',
+    'Compact Power Banks',
+  ],
+  'Smart Gadgets': [
+    'Smart Watches',
+    'Smart Bulbs',
+    'Tracking Devices',
+    'Portable Speakers',
+  ],
+  'Home Cleaning': [
+    'Deep Cleaning',
+    'Kitchen Cleaning',
+    'Bathroom Cleaning',
+    'Sofa Cleaning',
+  ],
+  'Electrician': [
+    'Wiring Repair',
+    'Switch Board Fix',
+    'Appliance Installation',
+    'Lighting Setup',
+  ],
+  'Plumber': [
+    'Leak Repair',
+    'Tap Installation',
+    'Drain Cleaning',
+    'Pipe Fitting',
+  ],
+  'AC Service': [
+    'AC Installation',
+    'AC Gas Refill',
+    'AC Repair',
+    'AC Maintenance',
+  ],
+  'Salon at Home': [
+    'Hair Styling',
+    'Facial',
+    'Manicure & Pedicure',
+    'Bridal Services',
+  ],
+  'Document Delivery': [
+    'Office Documents',
+    'Legal Documents',
+    'Educational Documents',
+    'Urgent File Delivery',
+  ],
+  'Fragile Items': [
+    'Glass Items',
+    'Electronic Items',
+    'Decor Items',
+    'Secure Packed Items',
+  ],
+  'Gift Delivery': [
+    'Birthday Gift Delivery',
+    'Anniversary Gift Delivery',
+    'Festival Gift Delivery',
+    'Surprise Gift Delivery',
+  ],
+};
+
+String canonicalCategory(String raw) {
+  final normalized = raw.trim().toLowerCase();
+  switch (normalized) {
+    case 'grocery':
+    case 'groceries':
+      return 'Grocery';
+    case 'food':
+    case 'foods':
+      return 'Food';
+    case 'gift':
+    case 'gifts':
+      return 'Gifts';
+    case 'beauty & personal care':
+    case 'beauty':
+    case 'personal care':
+    case 'cosmetic':
+    case 'cosmetics':
+      return 'Beauty & Personal Care';
+    case 'electronic':
+    case 'electronics':
+    case 'electric':
+    case 'electrics':
+      return 'Electronics';
+    case 'household essentials':
+    case 'household':
+    case 'essentials':
+      return 'Household Essentials';
+    case 'pet':
+    case 'pets':
+    case 'pet store':
+      return 'Pet Store';
+    case 'party':
+    case 'party store':
+      return 'Party Store';
+    case 'print':
+    case 'print store':
+    case 'printing':
+      return 'Print Store';
+    default:
+      return raw.trim().isEmpty ? 'General' : raw.trim();
+  }
+}
+
+String normalizeOption(String? value) {
+  final normalized = value?.trim().toLowerCase() ?? '';
+  return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '');
+}
+
+List<String> buildSubcategoryOptions(String category) {
+  final canonical = canonicalCategory(category);
+  return categorySubcategoryMap[canonical]?.toList() ?? const [];
+}
+
+List<String> buildChildCategoryOptions(String? subcategory) {
+  if (subcategory == null || subcategory.trim().isEmpty) {
+    return const [];
+  }
+
+  return subcategoryChildCategoryMap[subcategory.trim()]?.toList() ?? const [];
+}
+
+List<String> buildSubcategoriesForCategory(
+  Iterable<Map<String, dynamic>> products, {
+  required String firestoreCategory,
+}) {
+  final expectedCategory = canonicalCategory(firestoreCategory);
+  final normalizedExpectedCategory = normalizeOption(expectedCategory);
+  final subcategories = <String>[];
+  final seen = <String>{};
+
+  for (final data in products) {
+    final rawCategory = data['category']?.toString().trim() ?? '';
+    final normalizedRawCategory = normalizeOption(rawCategory);
+    final categoryMatches = normalizedRawCategory.isEmpty
+        ? false
+        : normalizedRawCategory == normalizedExpectedCategory ||
+              normalizedExpectedCategory.contains(normalizedRawCategory) ||
+              normalizedRawCategory.contains(normalizedExpectedCategory);
+
+    if (!categoryMatches) {
+      continue;
+    }
+
+    final rawSubcategory = data['subcategory']?.toString().trim() ?? '';
+    if (rawSubcategory.isEmpty) {
+      continue;
+    }
+
+    final normalizedSubcategory = normalizeOption(rawSubcategory);
+    if (normalizedSubcategory.isEmpty || seen.contains(normalizedSubcategory)) {
+      continue;
+    }
+
+    seen.add(normalizedSubcategory);
+    subcategories.add(rawSubcategory);
+  }
+
+  return subcategories;
+}
+
+bool matchesCategoryAndSubcategory(
+  Map<String, dynamic> data, {
+  required String firestoreCategory,
+  String? selectedSubcategory,
+  String? selectedChildCategory,
+  List<String> availableSubcategories = const [],
+}) {
+  final expectedCategory = canonicalCategory(firestoreCategory);
+  final rawCategory = data['category']?.toString().trim() ?? '';
+  final normalizedRawCategory = normalizeOption(rawCategory);
+  final normalizedExpectedCategory = normalizeOption(expectedCategory);
+
+  final categoryMatches = normalizedRawCategory.isEmpty
+      ? false
+      : normalizedRawCategory == normalizedExpectedCategory ||
+            normalizedExpectedCategory.contains(normalizedRawCategory) ||
+            normalizedRawCategory.contains(normalizedExpectedCategory);
+
+  if (!categoryMatches) {
+    return false;
+  }
+
+  if (selectedSubcategory == null || selectedSubcategory.trim().isEmpty) {
+    if (selectedChildCategory == null || selectedChildCategory.trim().isEmpty) {
+      return true;
+    }
+
+    final normalizedChildCategory = normalizeOption(selectedChildCategory);
+    final rawChildCategory = data['childCategory']?.toString().trim() ?? '';
+    final normalizedRawChildCategory = normalizeOption(rawChildCategory);
+    return normalizedRawChildCategory.isEmpty
+        ? false
+        : normalizedRawChildCategory == normalizedChildCategory;
+  }
+
+  final rawSubcategory = data['subcategory']?.toString().trim() ?? '';
+  final normalizedRawSubcategory = normalizeOption(rawSubcategory);
+  final normalizedSelectedSubcategory = normalizeOption(selectedSubcategory);
+
+  if (normalizedSelectedSubcategory.isEmpty) {
+    return true;
+  }
+
+  if (normalizedRawSubcategory.isEmpty) {
+    return false;
+  }
+
+  final subcategoryMatches = normalizedRawSubcategory == normalizedSelectedSubcategory;
+  if (!subcategoryMatches) {
+    return false;
+  }
+
+  if (selectedChildCategory == null || selectedChildCategory.trim().isEmpty) {
+    return true;
+  }
+
+  final normalizedChildCategory = normalizeOption(selectedChildCategory);
+  final rawChildCategory = data['childCategory']?.toString().trim() ?? '';
+  if (normalizedChildCategory.isEmpty) {
+    return true;
+  }
+
+  final normalizedRawChildCategory = normalizeOption(rawChildCategory);
+  return normalizedRawChildCategory.isEmpty
+      ? false
+      : normalizedRawChildCategory == normalizedChildCategory;
+}
