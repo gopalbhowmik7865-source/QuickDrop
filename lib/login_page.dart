@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'auth_service.dart';
+import 'phone_auth_service.dart';
 import 'main.dart';
 
 class LoginPage extends StatefulWidget {
@@ -19,12 +20,14 @@ class _LoginPageState extends State<LoginPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final AuthService _authService = AuthService();
+  final PhoneAuthService _phoneAuthService = PhoneAuthService();
 
   bool _isLoading = false;
   bool _otpSent = false;
   String? _verificationId;
   int? _resendToken;
   bool _verificationCompleted = false;
+  bool _instantVerificationUsed = false;
 
   @override
   void dispose() {
@@ -91,7 +94,7 @@ class _LoginPageState extends State<LoginPage> {
         _phoneController.text.trim(),
       );
 
-      await _authService.sendOtp(
+      await _phoneAuthService.sendOtp(
         phoneNumber: normalizedPhone,
         forceResendingToken: _resendToken,
         onCodeSent: (verificationId, resendToken) {
@@ -102,14 +105,26 @@ class _LoginPageState extends State<LoginPage> {
               _otpSent = true;
             });
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('OTP sent successfully')),
+              const SnackBar(
+                content: Text(
+                  'OTP request accepted. If not received in 30-60 seconds, tap Send OTP again.',
+                ),
+              ),
             );
           }
         },
         onVerificationCompleted: (_) async {
+          _instantVerificationUsed = true;
           if (!mounted) {
             return;
           }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Phone verified automatically. SMS OTP may not be sent on this device.',
+              ),
+            ),
+          );
           await _completeLoginAfterOtp();
         },
         onVerificationFailed: (error) {
@@ -155,6 +170,18 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
+    if (_instantVerificationUsed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Phone is already verified automatically. Continue to login.',
+          ),
+        ),
+      );
+      await _completeLoginAfterOtp();
+      return;
+    }
+
     final verificationId = _verificationId;
     if (verificationId == null || verificationId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -176,7 +203,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      await _authService.verifyOtp(verificationId: verificationId, otp: otp);
+      await _phoneAuthService.verifyOtp(verificationId: verificationId, otp: otp);
       await _completeLoginAfterOtp();
     } on FirebaseAuthException catch (error) {
       if (!mounted) {

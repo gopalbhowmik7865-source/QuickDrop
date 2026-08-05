@@ -1,7 +1,6 @@
 const List<String> grocerySubcategories = [
   'Atta, Rice & Dal',
   'Oil, Ghee & Masala',
-  'Fruits & Vegetables',
   'Dairy & Eggs',
   'Bakery & Biscuits',
   'Dry Fruits & Cereals',
@@ -14,6 +13,17 @@ const List<String> grocerySubcategories = [
   'Instant Food',
   'Sauces & Spreads',
   'Ice Creams',
+];
+
+const List<String> vegetableSubcategories = [
+  'Fresh Vegetables',
+  'Leafy Greens',
+  'Cut & Packed',
+];
+
+const List<String> fruitSubcategories = [
+  'Fresh Fruits',
+  'Cut & Packed',
 ];
 
 const List<String> foodSubcategories = [
@@ -86,14 +96,13 @@ const List<String> printSubcategories = [
 
 const Map<String, List<String>> categorySubcategoryMap = {
   'Grocery': grocerySubcategories,
+  'Vegetables': vegetableSubcategories,
+  'Fruits': fruitSubcategories,
   'Food': foodSubcategories,
   'Gifts': giftSubcategories,
-  'Beauty & Personal Care': beautySubcategories,
+  'Gifts & Surprises': ['Surprise your loved ones'],
+  'Cosmetics': beautySubcategories,
   'Electronics': electronicsSubcategories,
-  'Household Essentials': householdSubcategories,
-  'Pet Store': petSubcategories,
-  'Party Store': partySubcategories,
-  'Print Store': printSubcategories,
 };
 
 const Map<String, List<String>> subcategoryChildCategoryMap = {
@@ -114,6 +123,29 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Fresh Vegetables',
     'Leafy Greens',
     'Cut & Packed',
+  ],
+  'Fresh Vegetables': [
+    'Root Vegetables',
+    'Green Vegetables',
+    'Seasonal Vegetables',
+    'Other Vegetables',
+  ],
+  'Leafy Greens': [
+    'Spinach',
+    'Coriander',
+    'Fenugreek',
+    'Other Leafy Greens',
+  ],
+  'Fresh Fruits': [
+    'Seasonal Fruits',
+    'Citrus Fruits',
+    'Tropical Fruits',
+    'Other Fruits',
+  ],
+  'Cut & Packed': [
+    'Cut Fruits',
+    'Cut Vegetables',
+    'Mixed Packs',
   ],
   'Dairy, Bread & Eggs': [
     'Milk',
@@ -447,6 +479,12 @@ String canonicalCategory(String raw) {
     case 'grocery':
     case 'groceries':
       return 'Grocery';
+    case 'vegetable':
+    case 'vegetables':
+      return 'Vegetables';
+    case 'fruit':
+    case 'fruits':
+      return 'Fruits';
     case 'food':
     case 'foods':
       return 'Food';
@@ -458,7 +496,7 @@ String canonicalCategory(String raw) {
     case 'personal care':
     case 'cosmetic':
     case 'cosmetics':
-      return 'Beauty & Personal Care';
+      return 'Cosmetics';
     case 'electronic':
     case 'electronics':
     case 'electric':

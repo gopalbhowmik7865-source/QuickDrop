@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -24,12 +25,14 @@ class AuthService {
     void Function(FirebaseAuthException error)? onVerificationFailed,
     void Function(String verificationId)? onCodeAutoRetrievalTimeout,
     int? forceResendingToken,
+    Duration timeout = const Duration(seconds: 60),
   }) async {
     debugPrint(
       'QuickDropAuth verifyPhoneNumber.start: phoneNumber=$phoneNumber, forceResendingToken=${forceResendingToken?.toString() ?? 'null'}',
     );
     await _firebaseAuth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
+      timeout: timeout,
       forceResendingToken: forceResendingToken,
       verificationCompleted: (PhoneAuthCredential credential) async {
         debugPrint(
@@ -220,6 +223,7 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    await _firebaseAuth.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     await prefs.remove(_prefsLoggedInKey);

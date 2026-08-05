@@ -1,10 +1,17 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import 'auth_service.dart';
-import 'main.dart';
 import 'login_page.dart';
+import 'main.dart';
+import 'models/profile_models.dart';
+import 'services/profile_firestore_service.dart';
+import 'widgets/profile_common_widgets.dart';
 
 class AuthProfilePage extends StatefulWidget {
   const AuthProfilePage({super.key});
@@ -14,82 +21,76 @@ class AuthProfilePage extends StatefulWidget {
 }
 
 class _AuthProfilePageState extends State<AuthProfilePage> {
-  final AuthService _authService = AuthService();
+  final ProfileFirestoreService _profileService = ProfileFirestoreService();
 
-  bool _isLoading = true;
-  bool _isSaving = false;
-
-  String _name = '-';
-  String _phone = '-';
-  String _address = '-';
+  bool _isBootstrapping = true;
+  String? _bootstrapError;
+  late Future<NotificationSettingsModel> _notificationSettingsFuture;
+  NotificationSettingsModel? _notificationSettingsCache;
+  bool _isSavingNotificationSettings = false;
 
   @override
   void initState() {
     super.initState();
-    _loadProfile();
+    _notificationSettingsFuture = _loadNotificationSettings();
+    _bootstrap();
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _bootstrap() async {
     setState(() {
-      _isLoading = true;
+      _isBootstrapping = true;
+      _bootstrapError = null;
+      _notificationSettingsCache = null;
+      _notificationSettingsFuture = _loadNotificationSettings();
     });
 
     try {
-      developer.log(
-        'Profile load start: reading local user session.',
-        name: 'QuickDropAuth',
-      );
+      await _profileService.bootstrapUserProfile();
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      _bootstrapError = 'Coming Soon';
+    }
 
-      final profile = await _authService.loadCurrentUserProfile();
-      if (!mounted || profile == null) {
-        developer.log(
-          'Profile load result: profile is null (session not available).',
-          name: 'QuickDropAuth',
-        );
-        return;
-      }
+    if (!mounted) {
+      return;
+    }
 
-      setState(() {
-        _name = (profile['name'] as String?)?.trim().isNotEmpty == true
-            ? (profile['name'] as String)
-            : '-';
-        _phone = (profile['phoneNumber'] as String?)?.trim().isNotEmpty == true
-            ? (profile['phoneNumber'] as String)
-            : (profile['phone'] as String?)?.trim().isNotEmpty == true
-            ? (profile['phone'] as String)
-            : '-';
-        _address = (profile['address'] as String?)?.trim().isNotEmpty == true
-            ? (profile['address'] as String)
-            : '-';
-      });
+    setState(() {
+      _isBootstrapping = false;
+    });
+  }
 
-      developer.log(
-        'Profile load success: name=$_name, phone=$_phone',
-        name: 'QuickDropAuth',
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      developer.log('Profile load failed: $error', name: 'QuickDropAuth');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+  void _recordProfileError(Object error, {StackTrace? stackTrace}) {
+    developer.log(
+      'Profile operation failed.',
+      name: 'QuickDropProfileUI',
+      error: error,
+      stackTrace: stackTrace,
+    );
+
+    if (error is FirebaseException) {
+      final message = error.message ?? '';
+      if (error.code == 'failed-precondition') {
+        final match = RegExp(r'https://console\.firebase\.google\.com\S+').firstMatch(message);
+        if (match != null) {
+          debugPrint('Required Firestore index: ${match.group(0)}');
+        }
       }
     }
   }
 
-  Future<void> _showEditProfileDialog() async {
-    final nameController = TextEditingController(text: _name == '-' ? '' : _name);
-    final addressController = TextEditingController(
-      text: _address == '-' ? '' : _address,
-    );
+  void _showProfileMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showEditProfileDialog(UserProfileModel profile) async {
     final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController(text: profile.name);
+    final phoneController = TextEditingController(text: profile.phoneNumber);
 
     await showDialog<void>(
       context: context,
@@ -98,89 +99,62 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
           title: const Text('Edit Profile'),
           content: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: addressController,
-                  decoration: const InputDecoration(labelText: 'Address'),
-                  minLines: 2,
-                  maxLines: 3,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter address';
-                    }
-                    return null;
-                  },
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'Mobile Number'),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter mobile number';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
             TextButton(
-              onPressed: _isSaving
-                  ? null
-                  : () => Navigator.pop(dialogContext),
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Cancel'),
             ),
-            ElevatedButton(
-              onPressed: _isSaving
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) {
-                        return;
-                      }
-                      setState(() {
-                        _isSaving = true;
-                      });
-                      try {
-                        developer.log('Profile save start.', name: 'QuickDropAuth');
+            FilledButton(
+              onPressed: () async {
+                if (!(formKey.currentState?.validate() ?? false)) {
+                  return;
+                }
 
-                        await _authService.updateCurrentUserProfile(
-                          name: nameController.text.trim(),
-                          address: addressController.text.trim(),
-                        );
+                try {
+                  await _profileService.updateUserProfile(
+                    name: nameController.text.trim(),
+                    phoneNumber: phoneController.text.trim(),
+                  );
+                } catch (error, stackTrace) {
+                  _recordProfileError(error, stackTrace: stackTrace);
+                  _showProfileMessage('Coming Soon');
+                  return;
+                }
 
-                        developer.log(
-                          'Profile save success.',
-                          name: 'QuickDropAuth',
-                        );
-
-                        if (!mounted || !dialogContext.mounted) {
-                          return;
-                        }
-                        Navigator.pop(dialogContext);
-                        await _loadProfile();
-                      } catch (error) {
-                        if (!mounted || !dialogContext.mounted) {
-                          return;
-                        }
-                        ScaffoldMessenger.of(dialogContext).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              error.toString().replaceFirst('Exception: ', ''),
-                            ),
-                          ),
-                        );
-                      } finally {
-                        if (mounted) {
-                          setState(() {
-                            _isSaving = false;
-                          });
-                        }
-                      }
-                    },
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              },
               child: const Text('Save'),
             ),
           ],
@@ -189,282 +163,550 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     );
 
     nameController.dispose();
-    addressController.dispose();
+    phoneController.dispose();
   }
 
-  Future<void> _logout() async {
-    try {
-      await _authService.signOut();
+  Future<void> _showAddressForm(UserProfileModel profile, {AddressModel? existing}) async {
+    final formKey = GlobalKey<FormState>();
+    final labelController = TextEditingController(text: existing?.label ?? 'Home');
+    final recipientController = TextEditingController(
+      text: existing?.recipientName ?? profile.name,
+    );
+    final phoneController = TextEditingController(
+      text: existing?.phoneNumber ?? profile.phoneNumber,
+    );
+    final line1Controller = TextEditingController(text: existing?.line1 ?? '');
+    final line2Controller = TextEditingController(text: existing?.line2 ?? '');
+    final cityController = TextEditingController(text: existing?.city ?? '');
+    final stateController = TextEditingController(text: existing?.state ?? '');
+    final pincodeController = TextEditingController(text: existing?.pincode ?? '');
+    final landmarkController = TextEditingController(text: existing?.landmark ?? '');
+    var isDefault = existing?.isDefault ?? false;
 
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => LoginPage(
-            cartNotifier: ValueNotifier<List<CartItem>>([]),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 14,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 18,
           ),
-        ),
-        (route) => false,
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
-      );
-    }
-  }
-
-  String _initialsFromName(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isEmpty || trimmed == '-') {
-      return 'QD';
-    }
-
-    final parts = trimmed.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-    if (parts.isEmpty) {
-      return 'QD';
-    }
-
-    if (parts.length == 1) {
-      return parts.first.substring(0, parts.first.length >= 2 ? 2 : 1).toUpperCase();
-    }
-
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
-
-  Widget _buildAvatarHeader(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final isCompact = width < 390;
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(18, isCompact ? 18 : 22, 18, 22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0A4FBD), Color(0xFF0F6CFF), Color(0xFF55B2FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade200.withValues(alpha: 0.75),
-            blurRadius: 26,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: isCompact ? 76 : 88,
-            height: isCompact ? 76 : 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 2.2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.16),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-              gradient: const LinearGradient(
-                colors: [Color(0xFFEDF5FF), Color(0xFFCFE4FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                _initialsFromName(_name),
-                style: TextStyle(
-                  color: const Color(0xFF0A4FBD),
-                  fontSize: isCompact ? 22 : 26,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    existing == null ? 'Add Address' : 'Edit Address',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(999),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: labelController,
+                    decoration: const InputDecoration(labelText: 'Label (Home/Office)'),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter label' : null,
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: recipientController,
+                    decoration: const InputDecoration(labelText: 'Recipient Name'),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter recipient' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(labelText: 'Mobile Number'),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter mobile number' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: line1Controller,
+                    decoration: const InputDecoration(labelText: 'Address Line 1'),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter address line 1' : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: line2Controller,
+                    decoration: const InputDecoration(labelText: 'Address Line 2 (Optional)'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
                     children: [
-                      const Icon(Icons.phone_outlined, color: Colors.white, size: 14),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          _phone,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
+                      Expanded(
+                        child: TextFormField(
+                          controller: cityController,
+                          decoration: const InputDecoration(labelText: 'City'),
+                          validator: (value) =>
+                              (value == null || value.trim().isEmpty) ? 'Enter city' : null,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: stateController,
+                          decoration: const InputDecoration(labelText: 'State'),
+                          validator: (value) =>
+                              (value == null || value.trim().isEmpty) ? 'Enter state' : null,
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Manage your QuickDrop Go account details',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: pincodeController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Pincode'),
+                    validator: (value) =>
+                        (value == null || value.trim().isEmpty) ? 'Enter pincode' : null,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: landmarkController,
+                    decoration: const InputDecoration(labelText: 'Landmark (Optional)'),
+                  ),
+                  const SizedBox(height: 8),
+                  StatefulBuilder(
+                    builder: (context, setSheetState) {
+                      return SwitchListTile.adaptive(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Set as default address'),
+                        value: isDefault,
+                        onChanged: (value) {
+                          setSheetState(() {
+                            isDefault = value;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (!(formKey.currentState?.validate() ?? false)) {
+                          return;
+                        }
+
+                        try {
+                          if (existing == null) {
+                            await _profileService.addAddress(
+                              label: labelController.text.trim(),
+                              recipientName: recipientController.text.trim(),
+                              phoneNumber: phoneController.text.trim(),
+                              line1: line1Controller.text.trim(),
+                              line2: line2Controller.text.trim(),
+                              city: cityController.text.trim(),
+                              state: stateController.text.trim(),
+                              pincode: pincodeController.text.trim(),
+                              landmark: landmarkController.text.trim(),
+                              isDefault: isDefault,
+                            );
+                          } else {
+                            await _profileService.updateAddress(
+                              existing.id,
+                              label: labelController.text.trim(),
+                              recipientName: recipientController.text.trim(),
+                              phoneNumber: phoneController.text.trim(),
+                              line1: line1Controller.text.trim(),
+                              line2: line2Controller.text.trim(),
+                              city: cityController.text.trim(),
+                              state: stateController.text.trim(),
+                              pincode: pincodeController.text.trim(),
+                              landmark: landmarkController.text.trim(),
+                              isDefault: isDefault,
+                            );
+                          }
+                        } catch (error, stackTrace) {
+                          _recordProfileError(error, stackTrace: stackTrace);
+                          _showProfileMessage('Coming Soon');
+                          return;
+                        }
+
+                        if (sheetContext.mounted) {
+                          Navigator.pop(sheetContext);
+                        }
+                      },
+                      child: Text(existing == null ? 'Save Address' : 'Update Address'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+        );
+      },
+    );
+
+    labelController.dispose();
+    recipientController.dispose();
+    phoneController.dispose();
+    line1Controller.dispose();
+    line2Controller.dispose();
+    cityController.dispose();
+    stateController.dispose();
+    pincodeController.dispose();
+    landmarkController.dispose();
+  }
+
+  Future<void> _showAddWishlistDialog() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+            child: SizedBox(
+              height: MediaQuery.of(sheetContext).size.height * 0.66,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Add to Wishlist',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('products')
+                          .limit(30)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+
+                        if (snapshot.hasError) {
+                          return const Center(
+                            child: Text(
+                              'Coming Soon',
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        }
+
+                        final docs = snapshot.data?.docs ?? [];
+                        if (docs.isEmpty) {
+                          return const EmptyStateCard(
+                            icon: Icons.inventory_2_outlined,
+                            message: 'Coming Soon',
+                          );
+                        }
+
+                        return ListView.separated(
+                          itemCount: docs.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final product = docs[index].data();
+                            final productId = docs[index].id;
+                            final name = (product['name'] ?? '').toString();
+                            final price = (product['price'] ?? '').toString();
+
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7FBFF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE0ECFF)),
+                              ),
+                              child: ListTile(
+                                title: Text(
+                                  name.isNotEmpty ? name : 'Nothing found',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                subtitle: Text(price.isNotEmpty ? 'Price: ₹$price' : 'Price not available'),
+                                trailing: IconButton(
+                                  onPressed: () async {
+                                    try {
+                                      await _profileService.addToWishlist(productId);
+                                      _showProfileMessage('Added to wishlist');
+                                    } catch (error, stackTrace) {
+                                      _recordProfileError(error, stackTrace: stackTrace);
+                                      _showProfileMessage('Coming Soon');
+                                    }
+                                  },
+                                  icon: const Icon(Icons.favorite_border),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _infoTile({required String label, required String value, required IconData icon}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.blue.shade50),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withValues(alpha: 0.45),
-            blurRadius: 18,
-            offset: const Offset(0, 9),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF3FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: const Color(0xFF0B63F6), size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.blueGrey.shade600,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Future<void> _toggleNotifications(
+    NotificationSettingsModel current, {
+    bool? orderUpdates,
+    bool? promotions,
+    bool? systemAlerts,
+  }) async {
+    final next = NotificationSettingsModel(
+      orderUpdates: orderUpdates ?? current.orderUpdates,
+      promotions: promotions ?? current.promotions,
+      systemAlerts: systemAlerts ?? current.systemAlerts,
+      updatedAt: DateTime.now(),
     );
+
+    setState(() {
+      _notificationSettingsCache = next;
+      _isSavingNotificationSettings = true;
+    });
+
+    try {
+      await _profileService.saveNotificationSettings(
+        orderUpdates: next.orderUpdates,
+        promotions: next.promotions,
+        systemAlerts: next.systemAlerts,
+      ).timeout(const Duration(seconds: 10));
+    } on TimeoutException catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings save timed out.');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _notificationSettingsCache = current;
+      });
+      _showProfileMessage('Unable to save notification settings. Please try again.');
+    } on FirebaseException catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings save Firebase error: ${error.code} ${error.message}');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _notificationSettingsCache = current;
+      });
+      _showProfileMessage('Unable to save notification settings. Please try again.');
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings save error: $error');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _notificationSettingsCache = current;
+      });
+      _showProfileMessage('Unable to save notification settings. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingNotificationSettings = false;
+        });
+      }
+    }
   }
 
-  Widget _buildActionButtons(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final stackButtons = width < 420;
-
-    final editButton = SizedBox(
-      height: 50,
-      child: OutlinedButton.icon(
-        onPressed: _showEditProfileDialog,
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFF0B63F6)),
-          foregroundColor: const Color(0xFF0B63F6),
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        icon: const Icon(Icons.edit_outlined),
-        label: const Text(
-          'Edit Profile',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-
-    final logoutButton = SizedBox(
-      height: 50,
-      child: ElevatedButton.icon(
-        onPressed: _logout,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0B63F6),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        ),
-        icon: const Icon(Icons.logout_rounded),
-        label: const Text(
-          'Logout',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    );
-
-    if (stackButtons) {
-      return Column(
-        children: [
-          SizedBox(width: double.infinity, child: editButton),
-          const SizedBox(height: 10),
-          SizedBox(width: double.infinity, child: logoutButton),
-        ],
+  Future<NotificationSettingsModel> _loadNotificationSettings() async {
+    try {
+      return await _profileService.getOrCreateNotificationSettings(
+        timeout: const Duration(seconds: 10),
       );
+    } on TimeoutException catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings load timed out.');
+      rethrow;
+    } on FirebaseException catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings load Firebase error: ${error.code} ${error.message}');
+      rethrow;
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Notification settings load error: $error');
+      rethrow;
+    }
+  }
+
+  void _reloadNotificationSettings() {
+    setState(() {
+      _notificationSettingsCache = null;
+      _notificationSettingsFuture = _loadNotificationSettings();
+    });
+  }
+
+  void _openOrdersPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OrdersPage()),
+    );
+  }
+
+  Future<SupportInfoModel?> _loadSupportInfo() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('app_support')
+          .doc('customer_support')
+          .get()
+          .timeout(const Duration(seconds: 10));
+
+      if (!snapshot.exists) {
+        return null;
+      }
+
+      return SupportInfoModel.fromFirestore(snapshot.data());
+    } on FirebaseException catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Support fetch Firebase error: ${error.code} ${error.message}');
+      return null;
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+      debugPrint('Support fetch error: $error');
+      return null;
+    }
+  }
+
+  Future<void> _openPhone(String phone) async {
+    final digits = phone.replaceAll(' ', '');
+    final uri = Uri.parse('tel:$digits');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      _showProfileMessage('Coming Soon');
+    }
+  }
+
+  Future<void> _openWhatsApp(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final uri = Uri.parse('https://wa.me/$digits');
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      _showProfileMessage('Coming Soon');
+    }
+  }
+
+  Future<void> _openEmail(String email) async {
+    final uri = Uri(
+      scheme: 'mailto',
+      path: email,
+    );
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      _showProfileMessage('Coming Soon');
+    }
+  }
+
+  Future<void> _shareQuickDrop() async {
+    String? shareMessage;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('app_content')
+          .doc('share_quickdrop')
+          .get();
+      final data = snapshot.data();
+      final firestoreMessage = (data?['message'] ?? '').toString().trim();
+      if (firestoreMessage.isNotEmpty) {
+        shareMessage = firestoreMessage;
+      }
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
     }
 
-    return Row(
-      children: [
-        Expanded(child: editButton),
-        const SizedBox(width: 10),
-        Expanded(child: logoutButton),
-      ],
+    if (shareMessage == null || shareMessage.isEmpty) {
+      _showProfileMessage('Coming Soon');
+      return;
+    }
+
+    await SharePlus.instance.share(
+      ShareParams(
+        text: shareMessage,
+        subject: 'QuickDrop Go',
+      ),
+    );
+  }
+
+  Future<void> _rateApp() async {
+    String? targetUrl;
+    String title = 'Rate QuickDrop';
+    String message =
+        'Enjoying QuickDrop?\n\nPlease rate us on Google Play after the app is published.';
+
+    try {
+      final config = await FirebaseFirestore.instance
+          .collection('app_content')
+          .doc('rate_app')
+          .get();
+      final data = config.data();
+      final firestoreTitle = (data?['title'] ?? '').toString().trim();
+      final firestoreMessage = (data?['message'] ?? '').toString().trim();
+      if (firestoreTitle.isNotEmpty) {
+        title = firestoreTitle;
+      }
+      if (firestoreMessage.isNotEmpty) {
+        message = firestoreMessage;
+      }
+      targetUrl = (data?['url'] ?? '').toString().trim();
+    } catch (error, stackTrace) {
+      _recordProfileError(error, stackTrace: stackTrace);
+    }
+
+    if (targetUrl == null || targetUrl.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(targetUrl);
+    if (uri == null) {
+      _showProfileMessage('Coming Soon');
+      return;
+    }
+
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      _showProfileMessage('Coming Soon');
+    }
+  }
+
+  void _openContentPage(String title, String docId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AppContentPage(
+          pageTitle: title,
+          documentId: docId,
+          profileService: _profileService,
+        ),
+      ),
     );
   }
 
@@ -472,83 +714,839 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        backgroundColor: Colors.transparent,
-        foregroundColor: const Color(0xFF102755),
-        elevation: 0,
+        title: const Text('Profile'),
       ),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFEAF3FF), Color(0xFFF7FAFF), Colors.white],
+            colors: [Color(0xFFE9F2FF), Color(0xFFF8FBFF), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
         ),
-        child: _isLoading
+        child: _isBootstrapping
             ? const Center(child: CircularProgressIndicator())
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 20),
-                children: [
-                  _buildAvatarHeader(context),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.blue.shade50),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.shade100.withValues(alpha: 0.35),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+            : _bootstrapError != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.cloud_off_outlined, color: Colors.blue, size: 44),
+                          const SizedBox(height: 10),
+                          const Text('Coming Soon', textAlign: TextAlign.center),
+                          const SizedBox(height: 10),
+                          FilledButton(
+                            onPressed: _bootstrap,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : StreamBuilder<UserProfileModel>(
+                    stream: _profileService.userProfileStream(),
+                    builder: (context, profileSnapshot) {
+                      if (profileSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (profileSnapshot.hasError || !profileSnapshot.hasData) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: const Text('Coming Soon', textAlign: TextAlign.center),
+                          ),
+                        );
+                      }
+
+                      final profile = profileSnapshot.data!;
+
+                      return RefreshIndicator(
+                        onRefresh: _bootstrap,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isWide = constraints.maxWidth > 680;
+
+                            final sections = [
+                              _buildProfileHeader(profile),
+                              _buildAccountDetails(profile),
+                              _buildAddressSection(profile),
+                              _buildWishlistSection(),
+                              _buildNotificationSection(),
+                              _buildOrderSection(),
+                              _buildSupportSection(),
+                              _buildUtilitiesSection(),
+                              _buildLogoutSection(),
+                            ];
+
+                            if (!isWide) {
+                              return ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+                                children: sections,
+                              );
+                            }
+
+                            return ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+                              children: [
+                                sections.first,
+                                const SizedBox(height: 8),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        children: [
+                                          sections[1],
+                                          sections[2],
+                                          sections[3],
+                                          sections[4],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        children: [
+                                          sections[5],
+                                          sections[6],
+                                          sections[7],
+                                          sections[8],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(UserProfileModel profile) {
+    final name = profile.name.isNotEmpty ? profile.name : 'Coming Soon';
+    final phone = profile.phoneNumber.isNotEmpty ? profile.phoneNumber : 'Not available';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0959D7), Color(0xFF3C8EFF), Color(0xFF79B5FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x3D3A8BFF),
+            blurRadius: 28,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 40,
+            backgroundColor: Colors.white.withValues(alpha: 0.24),
+            child: const Icon(
+              Icons.person_rounded,
+              size: 44,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  phone,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountDetails(UserProfileModel profile) {
+    return ProfileSectionCard(
+      title: 'User Information',
+      subtitle: 'Live profile data from Firestore',
+      icon: Icons.person_outline,
+      action: TextButton.icon(
+        onPressed: () => _showEditProfileDialog(profile),
+        icon: const Icon(Icons.edit_outlined, size: 16),
+        label: const Text('Edit'),
+      ),
+      child: Column(
+        children: [
+          ProfileInfoRow(
+            label: 'Name',
+            value: profile.name.isNotEmpty ? profile.name : 'Not available',
+            icon: Icons.badge_outlined,
+          ),
+          ProfileInfoRow(
+            label: 'Mobile Number',
+            value: profile.phoneNumber.isNotEmpty ? profile.phoneNumber : 'Not available',
+            icon: Icons.call_outlined,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddressSection(UserProfileModel profile) {
+    return ProfileSectionCard(
+      title: 'Saved Addresses',
+      subtitle: 'Add, edit and remove delivery addresses',
+      icon: Icons.location_on_outlined,
+      action: IconButton(
+        onPressed: () => _showAddressForm(profile),
+        icon: const Icon(Icons.add_circle_outline),
+      ),
+      child: StreamBuilder<List<AddressModel>>(
+        stream: _profileService.addressStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LinearProgressIndicator();
+          }
+
+          if (snapshot.hasError) {
+            return const Text('Coming Soon');
+          }
+
+          final addresses = snapshot.data ?? const <AddressModel>[];
+          if (addresses.isEmpty) {
+            return const EmptyStateCard(
+              icon: Icons.location_city_outlined,
+              message: 'No saved addresses yet.',
+            );
+          }
+
+          return Column(
+            children: addresses.map((address) {
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7FBFF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2EDFF)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          address.label,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        if (address.isDefault)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0B63F6),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Default',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => _showAddressForm(profile, existing: address),
+                          icon: const Icon(Icons.edit_outlined, size: 19),
+                        ),
+                        IconButton(
+                          onPressed: () async {
+                            try {
+                              await _profileService.deleteAddress(address.id);
+                            } catch (error, stackTrace) {
+                              _recordProfileError(error, stackTrace: stackTrace);
+                              _showProfileMessage('Coming Soon');
+                            }
+                          },
+                          icon: const Icon(Icons.delete_outline, size: 19),
                         ),
                       ],
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Text(address.recipientName, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(address.phoneNumber),
+                    const SizedBox(height: 4),
+                    Text(address.fullAddress),
+                  ],
+                ),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWishlistSection() {
+    return ProfileSectionCard(
+      title: 'Wishlist',
+      subtitle: 'Products you saved for later',
+      icon: Icons.favorite_border,
+      action: IconButton(
+        onPressed: _showAddWishlistDialog,
+        icon: const Icon(Icons.add_circle_outline),
+      ),
+      child: StreamBuilder<List<WishlistItemModel>>(
+        stream: _profileService.wishlistStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LinearProgressIndicator();
+          }
+
+          if (snapshot.hasError) {
+            return const Text('Coming Soon');
+          }
+
+          final wishlist = snapshot.data ?? const <WishlistItemModel>[];
+          if (wishlist.isEmpty) {
+            return const EmptyStateCard(
+              icon: Icons.favorite_outline,
+              message: 'Your wishlist is empty.',
+            );
+          }
+
+          return Column(
+            children: wishlist.map((item) {
+              return FutureBuilder<Map<String, dynamic>?>(
+                future: _profileService.getProduct(item.productId),
+                builder: (context, productSnapshot) {
+                  final product = productSnapshot.data;
+                  final name = (product?['name'] ?? '').toString();
+                  final price = (product?['price'] ?? '').toString();
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7FBFF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2EDFF)),
+                    ),
+                    child: Row(
                       children: [
-                        const Text(
-                          'Account Details',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF102755),
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAF3FF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF0B63F6)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name.isNotEmpty ? name : 'Nothing found',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                              if (price.isNotEmpty)
+                                Text('₹$price', style: const TextStyle(color: Color(0xFF516480))),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        IconButton(
+                          onPressed: () async {
+                            try {
+                              await _profileService.removeFromWishlist(item.productId);
+                            } catch (error, stackTrace) {
+                              _recordProfileError(error, stackTrace: stackTrace);
+                              _showProfileMessage('Coming Soon');
+                            }
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNotificationSection() {
+    return ProfileSectionCard(
+      title: 'Notification Settings',
+      subtitle: 'Stored in Firestore for FCM-ready preferences',
+      icon: Icons.notifications_active_outlined,
+      child: FutureBuilder<NotificationSettingsModel>(
+        future: _notificationSettingsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              _notificationSettingsCache == null) {
+            return const LinearProgressIndicator();
+          }
+
+          if (snapshot.hasError && _notificationSettingsCache == null) {
+            final message = snapshot.error is TimeoutException
+                ? 'Notification settings are taking too long to load.'
+                : 'Could not load notification settings right now.';
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _reloadNotificationSettings,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            );
+          }
+
+          final settings = _notificationSettingsCache ?? snapshot.data;
+          if (settings == null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Could not load notification settings right now.'),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _reloadNotificationSettings,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            );
+          }
+
+          return Column(
+            children: [
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Order Updates'),
+                value: settings.orderUpdates,
+                onChanged: _isSavingNotificationSettings
+                    ? null
+                    : (value) => _toggleNotifications(settings, orderUpdates: value),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Promotions'),
+                value: settings.promotions,
+                onChanged: _isSavingNotificationSettings
+                    ? null
+                    : (value) => _toggleNotifications(settings, promotions: value),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('System Alerts'),
+                value: settings.systemAlerts,
+                onChanged: _isSavingNotificationSettings
+                    ? null
+                    : (value) => _toggleNotifications(settings, systemAlerts: value),
+              ),
+              if (_isSavingNotificationSettings) const LinearProgressIndicator(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOrderSection() {
+    return ProfileSectionCard(
+      title: 'My Orders',
+      subtitle: 'Track and manage your existing orders',
+      icon: Icons.receipt_long_outlined,
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Go to My Orders', style: TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: const Text('Open your live order history page'),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: _openOrdersPage,
+      ),
+    );
+  }
+
+  Widget _buildSupportSection() {
+    return ProfileSectionCard(
+      title: 'Help & Support',
+      subtitle: 'Live support info from Firestore',
+      icon: Icons.support_agent_outlined,
+      child: FutureBuilder<SupportInfoModel?>(
+        future: _loadSupportInfo(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LinearProgressIndicator();
+          }
+
+          final support = snapshot.data;
+          if (support == null) {
+            return const EmptyStateCard(
+              icon: Icons.info_outline,
+              message: 'Support information is unavailable.',
+            );
+          }
+
+          final hasAnyField = support.phone.isNotEmpty ||
+              support.whatsapp.isNotEmpty ||
+              support.email.isNotEmpty ||
+              support.message.isNotEmpty;
+
+          if (!hasAnyField) {
+            return const EmptyStateCard(
+              icon: Icons.info_outline,
+              message: 'Support information is unavailable.',
+            );
+          }
+
+          return Column(
+            children: [
+              if (support.phone.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7FBFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.call_outlined, color: Color(0xFF0B63F6)),
+                    title: const Text('Phone', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(support.phone),
+                    trailing: const Icon(Icons.open_in_new, size: 18),
+                    onTap: () => _openPhone(support.phone),
+                  ),
+                ),
+              if (support.whatsapp.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7FBFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.chat_outlined, color: Color(0xFF0B63F6)),
+                    title: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(support.whatsapp),
+                    trailing: const Icon(Icons.open_in_new, size: 18),
+                    onTap: () => _openWhatsApp(support.whatsapp),
+                  ),
+                ),
+              if (support.email.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7FBFF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.email_outlined, color: Color(0xFF0B63F6)),
+                    title: const Text('Email', style: TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(support.email),
+                    trailing: const Icon(Icons.open_in_new, size: 18),
+                    onTap: () => _openEmail(support.email),
+                  ),
+                ),
+              if (support.message.isNotEmpty)
+                ProfileInfoRow(
+                  label: 'Message',
+                  value: support.message,
+                  icon: Icons.info_outline,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildUtilitiesSection() {
+    return ProfileSectionCard(
+      title: 'Utilities',
+      subtitle: 'Share app, legal docs and app feedback',
+      icon: Icons.apps_outage_outlined,
+      child: Column(
+        children: [
+          _utilityTile(
+            icon: Icons.ios_share_outlined,
+            title: 'Share QuickDrop',
+            onTap: _shareQuickDrop,
+          ),
+          _utilityTile(
+            icon: Icons.info_outline,
+            title: 'About Us',
+            onTap: () => _openContentPage('About Us', 'about_us'),
+          ),
+          _utilityTile(
+            icon: Icons.privacy_tip_outlined,
+            title: 'Privacy Policy',
+            onTap: () => _openContentPage('Privacy Policy', 'privacy_policy'),
+          ),
+          _utilityTile(
+            icon: Icons.gavel_outlined,
+            title: 'Terms & Conditions',
+            onTap: () => _openContentPage('Terms & Conditions', 'terms_conditions'),
+          ),
+          _utilityTile(
+            icon: Icons.star_border,
+            title: 'Rate App',
+            onTap: _rateApp,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutSection() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5F5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFDADA)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.logout, color: Colors.red),
+        title: const Text(
+          'Logout',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Colors.red,
+          ),
+        ),
+        onTap: _showLogoutConfirmation,
+      ),
+    );
+  }
+
+  Future<void> _showLogoutConfirmation() async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text(
+                'Logout',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldLogout != true) {
+      return;
+    }
+
+    await FirebaseAuth.instance.signOut();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LoginPage(
+          cartNotifier: ValueNotifier<List<CartItem>>([]),
+        ),
+      ),
+      (route) => false,
+    );
+  }
+
+  Widget _utilityTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7FBFF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2EDFF)),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF0B63F6)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
+    );
+  }
+
+}
+
+class AppContentPage extends StatelessWidget {
+  const AppContentPage({
+    super.key,
+    required this.pageTitle,
+    required this.documentId,
+    required this.profileService,
+  });
+
+  final String pageTitle;
+  final String documentId;
+  final ProfileFirestoreService profileService;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(pageTitle)),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE9F2FF), Color(0xFFF8FBFF), Colors.white],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: StreamBuilder<Map<String, dynamic>?>(
+          stream: profileService.appContentStream(documentId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: const Text('Coming Soon', textAlign: TextAlign.center),
+                ),
+              );
+            }
+
+            final data = snapshot.data;
+            if (data == null) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text(
+                    'Coming Soon',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+
+            final title = (data['title'] ?? pageTitle).toString();
+            final content = (data['content'] ?? '').toString();
+            final updatedAt = data['updatedAt'] is Timestamp
+                ? (data['updatedAt'] as Timestamp).toDate()
+                : null;
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFDDEBFF)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF11274E),
+                        ),
+                      ),
+                      if (updatedAt != null) ...[
+                        const SizedBox(height: 6),
                         Text(
-                          'Update your personal information for smoother deliveries',
-                          style: TextStyle(
-                            color: Colors.blueGrey.shade600,
-                            fontSize: 12,
+                          'Updated on ${updatedAt.day}/${updatedAt.month}/${updatedAt.year}',
+                          style: const TextStyle(
+                            color: Color(0xFF5D6F8F),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _infoTile(label: 'Name', value: _name, icon: Icons.person_outline),
-                        _infoTile(
-                          label: 'Phone Number',
-                          value: _phone,
-                          icon: Icons.phone_outlined,
-                        ),
-                        _infoTile(
-                          label: 'Address',
-                          value: _address,
-                          icon: Icons.location_on_outlined,
-                        ),
-                        const SizedBox(height: 4),
-                        _buildActionButtons(context),
-                        const SizedBox(height: 8),
                       ],
-                    ),
+                      const SizedBox(height: 14),
+                      Text(
+                        content.isNotEmpty
+                            ? content
+                            : 'Coming Soon',
+                        style: const TextStyle(
+                          height: 1.5,
+                          fontSize: 15,
+                          color: Color(0xFF1E2F4E),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

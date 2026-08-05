@@ -39,12 +39,18 @@ dependencies:
   geocoding: ^4.0.0
   firebase_messaging: ^16.4.1
   firebase_auth: ^6.0.2
+  firebase_storage: ^13.0.2
   flutter_local_notifications: ^17.2.3
   geolocator: ^14.0.2
   google_maps_flutter: ^2.13.1
   http: ^1.5.0
+  image_picker: ^1.1.2
+  package_info_plus: ^8.3.0
   razorpay_flutter: ^1.4.0
+  share_plus: ^11.1.0
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.2
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:

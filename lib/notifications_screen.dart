@@ -150,7 +150,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               return ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: sortedDocs.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final data = sortedDocs[index].data();
                   final title = data['title']?.toString().trim();

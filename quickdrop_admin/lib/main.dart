@@ -10,9 +10,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_order_details_page.dart';
+import 'banner_management_page.dart';
 import 'push_notification_service.dart';
 import 'firebase_options.dart';
 import 'category_routing.dart';
+import 'settings_page.dart';
 
 final GlobalKey<NavigatorState> adminNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -637,6 +639,28 @@ class _DashboardPageState extends State<DashboardPage> {
                   );
                 },
               ),
+              _DashboardCard(
+                icon: Icons.view_carousel_outlined,
+                title: 'Banner Management',
+                subtitle: 'Manage banners',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const BannerManagementPage(),
+                    ),
+                  );
+                },
+              ),
+              _DashboardCard(
+                icon: Icons.settings_outlined,
+                title: 'Settings',
+                subtitle: 'Settings',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsPage()),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -877,7 +901,7 @@ class _OrdersPageState extends State<OrdersPage> {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: _statusTabs.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final status = _statusTabs[index];
                       final label = status == null ? 'All' : status.label;
@@ -1012,6 +1036,16 @@ class _OrdersPageState extends State<OrdersPage> {
                               if (paymentId != null)
                                 _OrderDetailRow(label: 'Payment ID', value: paymentId),
                               _OrderDetailRow(label: 'Total', value: totalAmount),
+                              const SizedBox(height: 6),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: () =>
+                                      _openAdminOrderDetails(orderId),
+                                  icon: const Icon(Icons.visibility_outlined),
+                                  label: const Text('View Details'),
+                                ),
+                              ),
                               if (_canCancelOrder(orderStatus)) ...[
                                 const SizedBox(height: 6),
                                 Align(
@@ -1171,6 +1205,17 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   final CollectionReference<Map<String, dynamic>> _productsRef =
       FirebaseFirestore.instance.collection('products');
   static final List<String> _mainCategories = categorySubcategoryMap.keys.toList();
+  static const List<String> _productCategoryFilters = [
+    'Grocery',
+    'Vegetables',
+    'Fruits',
+    'Food',
+    'Gifts',
+    'Gifts & Surprises',
+    'Cosmetics',
+    'Electronics',
+  ];
+  String? _selectedProductCategory;
 
   String _contentTypeForExtension(String? extension) {
     switch ((extension ?? '').toLowerCase()) {
@@ -1247,6 +1292,25 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     final stockController = TextEditingController(
       text: initialData?['stock']?.toString() ?? '',
     );
+    final brandController = TextEditingController(
+      text: initialData?['brand']?.toString() ?? '',
+    );
+    final weightController = TextEditingController(
+      text: initialData?['weight']?.toString() ?? '',
+    );
+    final oldPriceController = TextEditingController(
+      text: initialData?['oldPrice']?.toString() ?? '',
+    );
+    final discountController = TextEditingController(
+      text: initialData?['discount']?.toString() ?? '',
+    );
+    final shortDescriptionController = TextEditingController(
+      text: initialData?['shortDescription']?.toString() ?? '',
+    );
+    const unitOptions = ['g', 'kg', 'ml', 'L', 'pcs'];
+    String selectedUnit = unitOptions.contains(initialData?['unit']?.toString())
+        ? initialData!['unit'].toString()
+        : 'g';
     bool isImageUploading = false;
     String selectedImageLabel = imageUrlController.text.trim().isEmpty
         ? 'No image selected'
@@ -1292,7 +1356,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: selectedCategory,
+                        initialValue: selectedCategory,
                         decoration: const InputDecoration(
                           labelText: 'Category',
                         ),
@@ -1320,7 +1384,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: selectedSubcategory,
+                        initialValue: selectedSubcategory,
                         decoration: const InputDecoration(
                           labelText: 'Subcategory',
                         ),
@@ -1339,7 +1403,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                           });
                         },
                         validator: (value) {
-                          if (value == null || value!.trim().isEmpty) {
+                          if (value == null || value.trim().isEmpty) {
                             return 'Please select subcategory';
                           }
                           return null;
@@ -1347,7 +1411,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
-                        value: selectedChildCategory,
+                        initialValue: selectedChildCategory,
                         decoration: const InputDecoration(
                           labelText: 'Child Category',
                         ),
@@ -1490,6 +1554,90 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: 10),
+                      _productField(
+                        controller: brandController,
+                        label: 'Brand',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _productField(
+                              controller: weightController,
+                              label: 'Weight',
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: selectedUnit,
+                              decoration: const InputDecoration(
+                                labelText: 'Unit',
+                              ),
+                              items: unitOptions
+                                  .map(
+                                    (unit) => DropdownMenuItem<String>(
+                                      value: unit,
+                                      child: Text(unit),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setDialogState(() {
+                                  selectedUnit = value ?? selectedUnit;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _productField(
+                        controller: oldPriceController,
+                        label: 'Old Price (MRP)',
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) {
+                            return null;
+                          }
+                          final oldPrice = double.tryParse(text);
+                          if (oldPrice == null || oldPrice < 0) {
+                            return 'Enter a valid old price';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _productField(
+                        controller: discountController,
+                        label: 'Discount %',
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) {
+                            return null;
+                          }
+                          final discount = double.tryParse(text);
+                          if (discount == null || discount < 0 || discount > 100) {
+                            return 'Enter a valid discount (0-100)';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _productField(
+                        controller: shortDescriptionController,
+                        label: 'Short Description',
+                      ),
                     ],
                   ),
                 ),
@@ -1515,6 +1663,12 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       'childCategory': selectedChildCategory?.trim() ?? '',
                       'imageUrl': imageUrlController.text.trim(),
                       'stock': int.parse(stockController.text.trim()),
+                      'brand': brandController.text.trim(),
+                      'weight': weightController.text.trim(),
+                      'unit': selectedUnit,
+                      'oldPrice': double.tryParse(oldPriceController.text.trim()) ?? 0.0,
+                      'discount': double.tryParse(discountController.text.trim()) ?? 0.0,
+                      'shortDescription': shortDescriptionController.text.trim(),
                     };
 
                     try {
@@ -1564,6 +1718,11 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     priceController.dispose();
     imageUrlController.dispose();
     stockController.dispose();
+    brandController.dispose();
+    weightController.dispose();
+    oldPriceController.dispose();
+    discountController.dispose();
+    shortDescriptionController.dispose();
   }
 
   Future<void> _deleteProduct(String id) async {
@@ -1622,32 +1781,77 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
               return aName.toLowerCase().compareTo(bName.toLowerCase());
             });
 
-          if (products.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.inventory_2_outlined,
-                    size: 40,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'No products found',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-              ),
-            );
+          int productCount(String? category) {
+            if (category == null) {
+              return products.length;
+            }
+            return products.where((doc) {
+              return doc.data()['category']?.toString().trim() == category;
+            }).length;
           }
 
-          return ListView.separated(
+          final filteredProducts = _selectedProductCategory == null
+              ? products
+              : products.where((doc) {
+                  return doc.data()['category']?.toString().trim() ==
+                      _selectedProductCategory;
+                }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: SizedBox(
+                  height: 42,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _productCategoryFilters.length + 1,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final category = index == 0
+                          ? null
+                          : _productCategoryFilters[index - 1];
+                      final selected = _selectedProductCategory == category;
+                      final label = category ?? 'All Products';
+
+                      return ChoiceChip(
+                        label: Text('$label (${productCount(category)})'),
+                        selected: selected,
+                        onSelected: (_) {
+                          setState(() {
+                            _selectedProductCategory = category;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ),
+              Expanded(
+                child: filteredProducts.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 40,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No products found',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: products.length,
+            itemCount: filteredProducts.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              final doc = products[index];
+              final doc = filteredProducts[index];
               final data = doc.data();
               final name = data['name']?.toString() ?? 'Unnamed Product';
               final price = data['price'];
@@ -1726,6 +1930,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                 ),
               );
             },
+          ),
+              ),
+            ],
           );
         },
       ),

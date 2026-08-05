@@ -113,6 +113,20 @@ class AdminOrderDetailsPage extends StatelessWidget {
     return _displayValue(value);
   }
 
+  double _amountValue(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(
+          value?.toString().replaceAll(RegExp(r'[^0-9.-]'), '') ?? '',
+        ) ??
+        0;
+  }
+
+  String _currency(dynamic value) {
+    return '₹${_amountValue(value).toStringAsFixed(2)}';
+  }
+
   String _formatOrderDate(dynamic createdAt) {
     if (createdAt is Timestamp) {
       final date = createdAt.toDate();
@@ -191,6 +205,156 @@ class AdminOrderDetailsPage extends StatelessWidget {
               color: Color(0xFF1F2A44),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _orderItemsCard(List<dynamic> items) {
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5F0FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Ordered Items',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          for (var index = 0; index < items.length; index++) ...[
+            if (items[index] is Map)
+              Builder(
+                builder: (context) {
+                  final item = Map<String, dynamic>.from(items[index] as Map);
+                  final image = _displayValue(
+                    item['image'] ?? item['imageUrl'],
+                  );
+                  final brand = item['brand']?.toString().trim() ?? '';
+                  final weight = item['weight']?.toString().trim() ?? '';
+                  final unit = item['unit']?.toString().trim() ?? '';
+                  final description =
+                      item['shortDescription']?.toString().trim() ?? '';
+                  final quantity = _amountValue(item['quantity']).toInt();
+                  final price = _amountValue(item['price']);
+                  final oldPrice = _amountValue(item['oldPrice']);
+                  final discount = _amountValue(item['discountPercent']);
+                  final weightUnit = [
+                    weight,
+                    unit,
+                  ].where((value) => value.isNotEmpty).join(' ');
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: image == '-'
+                              ? Container(
+                                  width: 72,
+                                  height: 72,
+                                  color: const Color(0xFFF1F6FD),
+                                  child: const Icon(Icons.image_not_supported_outlined),
+                                )
+                              : Image.network(
+                                  image,
+                                  width: 72,
+                                  height: 72,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    width: 72,
+                                    height: 72,
+                                    color: const Color(0xFFF1F6FD),
+                                    child: const Icon(
+                                      Icons.image_not_supported_outlined,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _displayValue(
+                                  item['name'] ?? item['productName'],
+                                ),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1F2A44),
+                                ),
+                              ),
+                              if (brand.isNotEmpty) Text('Brand: $brand'),
+                              if (weightUnit.isNotEmpty) Text(weightUnit),
+                              if (description.isNotEmpty)
+                                Text(
+                                  description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              Text('Quantity: $quantity'),
+                              Text('Price: ${_currency(price)}'),
+                              if (oldPrice > 0)
+                                Row(
+                                  children: [
+                                    const Text('Old Price: '),
+                                    Text(
+                                      _currency(oldPrice),
+                                      style: const TextStyle(
+                                        decoration: TextDecoration.lineThrough,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              if (discount > 0)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE84141),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '${discount.toStringAsFixed(0)}% OFF',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                'Item Total: ${_currency(price * quantity)}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            if (index < items.length - 1) const Divider(),
+          ],
         ],
       ),
     );
@@ -304,6 +468,7 @@ class AdminOrderDetailsPage extends StatelessWidget {
         final totalAmount = _displayAmount(data['totalAmount']);
         final createdAt = _formatOrderDate(data['createdAt']);
         final history = (data['statusHistory'] as List<dynamic>?) ?? const [];
+        final items = (data['items'] as List<dynamic>?) ?? const [];
 
         return Scaffold(
           appBar: AppBar(title: const Text('Order Details')),
@@ -359,6 +524,15 @@ class AdminOrderDetailsPage extends StatelessWidget {
                     value: status == OrderStatus.cancelled
                         ? 'Order Cancelled'
                         : status.label,
+                  ),
+                  _orderItemsCard(items),
+                  _detailCard(
+                    label: 'Subtotal',
+                    value: _displayAmount(data['subtotal']),
+                  ),
+                  _detailCard(
+                    label: 'Delivery Charge',
+                    value: _displayAmount(data['deliveryCharge']),
                   ),
                   _detailCard(label: 'Total Amount', value: totalAmount),
                   _detailCard(label: 'Order Date', value: createdAt),
