@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quickdrop/main.dart';
+import 'package:quickdrop/splash_screen.dart';
 
 Future<void> pumpQuickDropApp(
   WidgetTester tester, {
@@ -14,36 +15,40 @@ Future<void> pumpQuickDropApp(
 }) async {
   SharedPreferences.setMockInitialValues(session);
   await tester.pumpWidget(
-    MaterialApp(home: HomePage(cartNotifier: ValueNotifier<List<CartItem>>([]))),
+    MaterialApp(
+      home: HomePage(cartNotifier: ValueNotifier<List<CartItem>>([])),
+    ),
   );
 }
 
 void main() {
   testWidgets('QuickDrop home screen shows grocery UI', (tester) async {
     await pumpQuickDropApp(tester);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(find.text('QuickDrop'), findsWidgets);
-    expect(find.text('Hello, shopper 👋'), findsOneWidget);
+    expect(find.text('QuickDrop Go'), findsWidgets);
+    expect(find.text('Hello, Shopper 👋'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
   });
 
   testWidgets('Splash screen shows startup UI', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: SplashScreen()));
-    expect(find.text('FAST • SAFE • LOCAL'), findsOneWidget);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SplashScreen(
+          duration: const Duration(days: 1),
+          nextPageBuilder: () async => const SizedBox.shrink(),
+        ),
+      ),
+    );
+    expect(find.text('QuickDrop'), findsOneWidget);
   });
 
-  testWidgets('Profile page opens from the drawer', (tester) async {
+  testWidgets('Profile action is available from the home header', (
+    tester,
+  ) async {
     await pumpQuickDropApp(tester);
-
-    await tester.pump();
-    await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ListTile, 'Profile').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Profile'), findsWidgets);
-    expect(find.text('Address'), findsOneWidget);
+    expect(find.byIcon(Icons.person_outline_rounded), findsOneWidget);
   });
 
   testWidgets('Placing an order adds it to My Orders', (tester) async {

@@ -124,7 +124,8 @@ bool _canTransitionOrderStatus(OrderStatus current, OrderStatus next) {
     case OrderStatus.accepted:
       return next == OrderStatus.packed || next == OrderStatus.cancelled;
     case OrderStatus.packed:
-      return next == OrderStatus.outForDelivery || next == OrderStatus.cancelled;
+      return next == OrderStatus.outForDelivery ||
+          next == OrderStatus.cancelled;
     case OrderStatus.outForDelivery:
       return next == OrderStatus.delivered || next == OrderStatus.cancelled;
     case OrderStatus.delivered:
@@ -210,12 +211,162 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        if (snapshot.hasData) {
-          return const DashboardPage();
+        final user = snapshot.data;
+        if (user != null) {
+          return _AdminClaimGate(user: user);
         }
 
         return const LoginPage();
       },
+    );
+  }
+}
+
+class _AdminClaimGate extends StatefulWidget {
+  const _AdminClaimGate({required this.user});
+
+  final User user;
+
+  @override
+  State<_AdminClaimGate> createState() => _AdminClaimGateState();
+}
+
+class _AdminClaimGateState extends State<_AdminClaimGate> {
+  bool _isChecking = true;
+  bool _isAdmin = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _verifyAdminClaim();
+  }
+
+  Future<void> _verifyAdminClaim() async {
+    if (!mounted) return;
+    setState(() {
+      _isChecking = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final token = await widget.user.getIdTokenResult(true);
+      if (!mounted) return;
+      setState(() {
+        _isAdmin = token.claims?['admin'] == true;
+      });
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isAdmin = false;
+        _errorMessage = error.message ?? 'Unable to verify admin access.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isChecking) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_isAdmin) {
+      return const DashboardPage();
+    }
+
+    return _AdminAccessDeniedPage(
+      email: widget.user.email,
+      errorMessage: _errorMessage,
+      onRetry: _verifyAdminClaim,
+      onLogout: () async {
+        await FirebaseAuth.instance.signOut();
+      },
+    );
+  }
+}
+
+class _AdminAccessDeniedPage extends StatelessWidget {
+  const _AdminAccessDeniedPage({
+    required this.email,
+    required this.onRetry,
+    required this.onLogout,
+    this.errorMessage,
+  });
+
+  final String? email;
+  final String? errorMessage;
+  final Future<void> Function() onRetry;
+  final Future<void> Function() onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Icon(Icons.lock_person_outlined, size: 48),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Admin access required',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      errorMessage ??
+                          'This account is signed in, but does not have administrator permissions.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    if (email != null && email!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Signed in as: ${email!.trim()}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Refresh Access'),
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: onLogout,
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Sign Out'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -250,10 +401,12 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      // Force refresh so newly assigned custom claims can be read immediately.
+      await credential.user?.getIdTokenResult(true);
     } on FirebaseAuthException catch (error) {
       if (!mounted) {
         return;
@@ -652,9 +805,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 },
               ),
               _DashboardCard(
-                icon: Icons.settings_outlined,
-                title: 'Settings',
-                subtitle: 'Settings',
+                icon: Icons.local_shipping_outlined,
+                title: 'Delivery Settings',
+                subtitle: 'Hub, radius, charges and store timing',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SettingsPage()),
@@ -783,10 +936,7 @@ class _OrdersPageState extends State<OrdersPage> {
         'status': nextStatus.label,
         'statusUpdatedAt': Timestamp.now(),
         'statusHistory': FieldValue.arrayUnion([
-          {
-            'status': nextStatus.label,
-            'updatedAt': Timestamp.now(),
-          },
+          {'status': nextStatus.label, 'updatedAt': Timestamp.now()},
         ]),
       };
 
@@ -950,9 +1100,10 @@ class _OrdersPageState extends State<OrdersPage> {
                             const SizedBox(height: 6),
                             Text(
                               'New orders will appear here in real time.',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
                             ),
                           ],
                         ),
@@ -965,171 +1116,225 @@ class _OrdersPageState extends State<OrdersPage> {
                           final doc = filteredDocs[index];
                           final data = doc.data();
 
-                    final orderId = _displayValue(data['orderId']);
-                    final customerName = _displayValue(
-                      data['customerName'] ?? data['name'] ?? data['ownerName'],
-                    );
-                    final phone = _displayValue(
-                      data['phoneNumber'] ?? data['phone'] ?? data['ownerPhone'],
-                    );
-                    final address = _displayValue(
-                      data['deliveryAddress'] ?? data['address'],
-                    );
-                    final orderStatus = _orderStatusFromValue(data['status']);
-                    final statusLabel = orderStatus == OrderStatus.cancelled
-                        ? 'Order Cancelled'
-                        : orderStatus.label;
-                    final statusColor = _orderStatusColor(orderStatus);
-                    final statusIcon = _orderStatusIcon(orderStatus);
-                    final paymentMethod = _displayValue(data['paymentMethod']);
-                    final paymentStatus = _displayValue(data['paymentStatus']);
-                    final paymentIdValue = data['paymentId']?.toString().trim() ?? '';
-                    final paymentId = paymentIdValue.isEmpty ? null : paymentIdValue;
-                    final totalAmount = _displayAmount(data['totalAmount']);
+                          final orderId = _displayValue(data['orderId']);
+                          final customerName = _displayValue(
+                            data['customerName'] ??
+                                data['name'] ??
+                                data['ownerName'],
+                          );
+                          final phone = _displayValue(
+                            data['phoneNumber'] ??
+                                data['phone'] ??
+                                data['ownerPhone'],
+                          );
+                          final address = _displayValue(
+                            data['deliveryAddress'] ?? data['address'],
+                          );
+                          final orderStatus = _orderStatusFromValue(
+                            data['status'],
+                          );
+                          final statusLabel =
+                              orderStatus == OrderStatus.cancelled
+                              ? 'Order Cancelled'
+                              : orderStatus.label;
+                          final statusColor = _orderStatusColor(orderStatus);
+                          final statusIcon = _orderStatusIcon(orderStatus);
+                          final paymentMethod = _displayValue(
+                            data['paymentMethod'],
+                          );
+                          final paymentStatus = _displayValue(
+                            data['paymentStatus'],
+                          );
+                          final paymentIdValue =
+                              data['paymentId']?.toString().trim() ?? '';
+                          final paymentId = paymentIdValue.isEmpty
+                              ? null
+                              : paymentIdValue;
+                          final totalAmount = _displayAmount(
+                            data['totalAmount'],
+                          );
 
-                      return Card(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                          return Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Order #$orderId',
-                                      style: Theme.of(context).textTheme.titleMedium
-                                          ?.copyWith(fontWeight: FontWeight.w700),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'Order #$orderId',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                      ),
+                                      Chip(
+                                        avatar: Icon(
+                                          statusIcon,
+                                          size: 16,
+                                          color: statusColor,
+                                        ),
+                                        label: Text(statusLabel),
+                                        backgroundColor: statusColor.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        side: BorderSide(
+                                          color: statusColor.withValues(
+                                            alpha: 0.22,
+                                          ),
+                                        ),
+                                        labelStyle: TextStyle(
+                                          color: statusColor,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _OrderDetailRow(
+                                    label: 'Customer',
+                                    value: customerName,
+                                  ),
+                                  _OrderDetailRow(label: 'Phone', value: phone),
+                                  _OrderDetailRow(
+                                    label: 'Address',
+                                    value: address,
+                                  ),
+                                  _OrderDetailRow(
+                                    label: 'Payment Method',
+                                    value: paymentMethod,
+                                  ),
+                                  _OrderDetailRow(
+                                    label: 'Payment Status',
+                                    value: paymentStatus,
+                                  ),
+                                  if (paymentId != null)
+                                    _OrderDetailRow(
+                                      label: 'Payment ID',
+                                      value: paymentId,
+                                    ),
+                                  _OrderDetailRow(
+                                    label: 'Total',
+                                    value: totalAmount,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
+                                      onPressed: () =>
+                                          _openAdminOrderDetails(orderId),
+                                      icon: const Icon(
+                                        Icons.visibility_outlined,
+                                      ),
+                                      label: const Text('View Details'),
                                     ),
                                   ),
-                                  Chip(
-                                    avatar: Icon(
-                                      statusIcon,
-                                      size: 16,
-                                      color: statusColor,
+                                  if (_canCancelOrder(orderStatus)) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () => _cancelOrder(
+                                          context,
+                                          doc,
+                                          orderStatus,
+                                        ),
+                                        icon: const Icon(Icons.cancel_outlined),
+                                        label: const Text('Cancel'),
+                                      ),
                                     ),
-                                    label: Text(statusLabel),
-                                    backgroundColor:
-                                        statusColor.withValues(alpha: 0.12),
-                                    side: BorderSide(
-                                      color: statusColor.withValues(alpha: 0.22),
+                                  ],
+                                  if (orderStatus == OrderStatus.pending) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () => _updateOrderStatus(
+                                          context,
+                                          doc,
+                                          orderStatus,
+                                          OrderStatus.accepted,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.check_circle_outline,
+                                        ),
+                                        label: const Text('Accept'),
+                                      ),
                                     ),
-                                    labelStyle: TextStyle(
-                                      color: statusColor,
-                                      fontWeight: FontWeight.w700,
+                                  ],
+                                  if (orderStatus == OrderStatus.accepted) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () => _updateOrderStatus(
+                                          context,
+                                          doc,
+                                          orderStatus,
+                                          OrderStatus.packed,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.inventory_2_outlined,
+                                        ),
+                                        label: const Text('Packed'),
+                                      ),
                                     ),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
+                                  ],
+                                  if (orderStatus == OrderStatus.packed) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () => _updateOrderStatus(
+                                          context,
+                                          doc,
+                                          orderStatus,
+                                          OrderStatus.outForDelivery,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.local_shipping_outlined,
+                                        ),
+                                        label: const Text('Out for Delivery'),
+                                      ),
+                                    ),
+                                  ],
+                                  if (orderStatus ==
+                                      OrderStatus.outForDelivery) ...[
+                                    const SizedBox(height: 6),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton.icon(
+                                        onPressed: () => _markOrderDelivered(
+                                          context,
+                                          doc,
+                                          orderStatus,
+                                        ),
+                                        icon: const Icon(
+                                          Icons.done_all_outlined,
+                                        ),
+                                        label: const Text('Delivered'),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              _OrderDetailRow(label: 'Customer', value: customerName),
-                              _OrderDetailRow(label: 'Phone', value: phone),
-                              _OrderDetailRow(label: 'Address', value: address),
-                              _OrderDetailRow(label: 'Payment Method', value: paymentMethod),
-                              _OrderDetailRow(label: 'Payment Status', value: paymentStatus),
-                              if (paymentId != null)
-                                _OrderDetailRow(label: 'Payment ID', value: paymentId),
-                              _OrderDetailRow(label: 'Total', value: totalAmount),
-                              const SizedBox(height: 6),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton.icon(
-                                  onPressed: () =>
-                                      _openAdminOrderDetails(orderId),
-                                  icon: const Icon(Icons.visibility_outlined),
-                                  label: const Text('View Details'),
-                                ),
-                              ),
-                              if (_canCancelOrder(orderStatus)) ...[
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () => _cancelOrder(
-                                      context,
-                                      doc,
-                                      orderStatus,
-                                    ),
-                                    icon: const Icon(Icons.cancel_outlined),
-                                    label: const Text('Cancel'),
-                                  ),
-                                ),
-                              ],
-                              if (orderStatus == OrderStatus.pending) ...[
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () => _updateOrderStatus(
-                                      context,
-                                      doc,
-                                      orderStatus,
-                                      OrderStatus.accepted,
-                                    ),
-                                    icon: const Icon(Icons.check_circle_outline),
-                                    label: const Text('Accept'),
-                                  ),
-                                ),
-                              ],
-                              if (orderStatus == OrderStatus.accepted) ...[
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () => _updateOrderStatus(
-                                      context,
-                                      doc,
-                                      orderStatus,
-                                      OrderStatus.packed,
-                                    ),
-                                    icon: const Icon(Icons.inventory_2_outlined),
-                                    label: const Text('Packed'),
-                                  ),
-                                ),
-                              ],
-                              if (orderStatus == OrderStatus.packed) ...[
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () => _updateOrderStatus(
-                                      context,
-                                      doc,
-                                      orderStatus,
-                                      OrderStatus.outForDelivery,
-                                    ),
-                                    icon: const Icon(Icons.local_shipping_outlined),
-                                    label: const Text('Out for Delivery'),
-                                  ),
-                                ),
-                              ],
-                              if (orderStatus == OrderStatus.outForDelivery) ...[
-                                const SizedBox(height: 6),
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton.icon(
-                                    onPressed: () => _markOrderDelivered(
-                                      context,
-                                      doc,
-                                      orderStatus,
-                                    ),
-                                    icon: const Icon(Icons.done_all_outlined),
-                                    label: const Text('Delivered'),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           );
@@ -1204,7 +1409,8 @@ class ProductManagementPage extends StatefulWidget {
 class _ProductManagementPageState extends State<ProductManagementPage> {
   final CollectionReference<Map<String, dynamic>> _productsRef =
       FirebaseFirestore.instance.collection('products');
-  static final List<String> _mainCategories = categorySubcategoryMap.keys.toList();
+  static final List<String> _mainCategories = categorySubcategoryMap.keys
+      .toList();
   static const List<String> _productCategoryFilters = [
     'Grocery',
     'Vegetables',
@@ -1278,11 +1484,15 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     String? selectedCategory = _mainCategories.contains(initialCategoryValue)
         ? initialCategoryValue
         : null;
-    String? selectedSubcategory = initialData?['subcategory']?.toString().trim();
+    String? selectedSubcategory = initialData?['subcategory']
+        ?.toString()
+        .trim();
     if (selectedSubcategory != null && selectedSubcategory.isEmpty) {
       selectedSubcategory = null;
     }
-    String? selectedChildCategory = initialData?['childCategory']?.toString().trim();
+    String? selectedChildCategory = initialData?['childCategory']
+        ?.toString()
+        .trim();
     if (selectedChildCategory != null && selectedChildCategory.isEmpty) {
       selectedChildCategory = null;
     }
@@ -1566,9 +1776,10 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                             child: _productField(
                               controller: weightController,
                               label: 'Weight',
-                              keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -1627,7 +1838,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                             return null;
                           }
                           final discount = double.tryParse(text);
-                          if (discount == null || discount < 0 || discount > 100) {
+                          if (discount == null ||
+                              discount < 0 ||
+                              discount > 100) {
                             return 'Enter a valid discount (0-100)';
                           }
                           return null;
@@ -1666,9 +1879,14 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       'brand': brandController.text.trim(),
                       'weight': weightController.text.trim(),
                       'unit': selectedUnit,
-                      'oldPrice': double.tryParse(oldPriceController.text.trim()) ?? 0.0,
-                      'discount': double.tryParse(discountController.text.trim()) ?? 0.0,
-                      'shortDescription': shortDescriptionController.text.trim(),
+                      'oldPrice':
+                          double.tryParse(oldPriceController.text.trim()) ??
+                          0.0,
+                      'discount':
+                          double.tryParse(discountController.text.trim()) ??
+                          0.0,
+                      'shortDescription': shortDescriptionController.text
+                          .trim(),
                     };
 
                     try {
@@ -1847,90 +2065,103 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         ),
                       )
                     : ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-            itemCount: filteredProducts.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final doc = filteredProducts[index];
-              final data = doc.data();
-              final name = data['name']?.toString() ?? 'Unnamed Product';
-              final price = data['price'];
-              final category = data['category']?.toString() ?? 'General';
-              final stock = data['stock']?.toString() ?? '0';
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                        itemCount: filteredProducts.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final doc = filteredProducts[index];
+                          final data = doc.data();
+                          final name =
+                              data['name']?.toString() ?? 'Unnamed Product';
+                          final price = data['price'];
+                          final category =
+                              data['category']?.toString() ?? 'General';
+                          final stock = data['stock']?.toString() ?? '0';
 
-              return Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: BorderSide(color: colorScheme.outlineVariant),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  name,
-                                  style: Theme.of(context).textTheme.titleMedium
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 4),
-                                Text('Category: $category'),
-                                const SizedBox(height: 2),
-                                Text('Price: ₹$price'),
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: int.tryParse(stock) == 0
-                                        ? Colors.red.shade100
-                                        : Colors.green.shade100,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    'Stock: $stock',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: int.tryParse(stock) == 0
-                                          ? Colors.red.shade800
-                                          : Colors.green.shade800,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                          return Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: colorScheme.outlineVariant,
+                              ),
                             ),
-                          ),
-                          IconButton(
-                            tooltip: 'Edit',
-                            onPressed: () => _showProductDialog(
-                              documentId: doc.id,
-                              initialData: data,
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              name,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text('Category: $category'),
+                                            const SizedBox(height: 2),
+                                            Text('Price: ₹$price'),
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: int.tryParse(stock) == 0
+                                                    ? Colors.red.shade100
+                                                    : Colors.green.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                              ),
+                                              child: Text(
+                                                'Stock: $stock',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  color:
+                                                      int.tryParse(stock) == 0
+                                                      ? Colors.red.shade800
+                                                      : Colors.green.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Edit',
+                                        onPressed: () => _showProductDialog(
+                                          documentId: doc.id,
+                                          initialData: data,
+                                        ),
+                                        icon: const Icon(Icons.edit_outlined),
+                                      ),
+                                      IconButton(
+                                        tooltip: 'Delete',
+                                        onPressed: () => _deleteProduct(doc.id),
+                                        icon: const Icon(Icons.delete_outline),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
-                            icon: const Icon(Icons.edit_outlined),
-                          ),
-                          IconButton(
-                            tooltip: 'Delete',
-                            onPressed: () => _deleteProduct(doc.id),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                        ],
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
               ),
             ],
           );

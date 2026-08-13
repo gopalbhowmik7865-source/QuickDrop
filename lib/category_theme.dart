@@ -39,48 +39,48 @@ class CategoryTheme {
 }
 
 const groceryCategoryTheme = CategoryTheme(
-  primary: Color(0xFF4CAF50),
-  background: Color(0xFFE8F5E9),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const vegetablesCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2ECC71),
-  background: Color(0xFFEAFBF1),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const fruitsCategoryTheme = CategoryTheme(
-  primary: Color(0xFFFF9800),
-  background: Color(0xFFFFF3E0),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const foodCategoryTheme = CategoryTheme(
-  primary: Color(0xFFF44336),
-  background: Color(0xFFFFEBEE),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const giftsCategoryTheme = CategoryTheme(
-  primary: Color(0xFFEC407A),
-  background: Color(0xFFFCE4EC),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const giftsSurprisesCategoryTheme = CategoryTheme(
-  primary: Color(0xFF8E44AD),
-  background: Color(0xFFF3E5F5),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const cosmeticsCategoryTheme = CategoryTheme(
-  primary: Color(0xFFAB47BC),
-  background: Color(0xFFF3E5F5),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const electronicsCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2196F3),
-  background: Color(0xFFE3F2FD),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const homeServiceCategoryTheme = CategoryTheme(
-  primary: Color(0xFF00897B),
-  background: Color(0xFFE0F2F1),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const parcelDeliveryCategoryTheme = CategoryTheme(
-  primary: Color(0xFFEF6C00),
-  background: Color(0xFFFFF3E0),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 const fallbackCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2196F3),
-  background: Color(0xFFE3F2FD),
+  primary: Color(0xFF2E7D32),
+  background: Color(0xFFF8F9FA),
 );
 
 const defaultCategoryThemes = <String, CategoryTheme>{

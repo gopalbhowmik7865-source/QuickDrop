@@ -8,7 +8,8 @@
   "scripts": {
     "lint": "echo \"No lint configured\"",
     "deploy": "firebase deploy --only functions",
-    "seed:profile": "node seed_profile_content.js"
+    "seed:profile": "node seed_profile_content.js",
+    "set-admin-claim": "node set_admin_claim.js"
   },
   "dependencies": {
     "firebase-admin": "^13.6.0",

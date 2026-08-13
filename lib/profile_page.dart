@@ -2,19 +2,29 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'login_page.dart';
-import 'main.dart';
 import 'models/profile_models.dart';
 import 'services/profile_firestore_service.dart';
 import 'widgets/profile_common_widgets.dart';
 
+enum AuthProfileViewMode {
+  profile,
+  wishlist,
+  savedAddresses,
+  settings,
+  helpSupport,
+}
+
 class AuthProfilePage extends StatefulWidget {
-  const AuthProfilePage({super.key});
+  const AuthProfilePage({
+    super.key,
+    this.viewMode = AuthProfileViewMode.profile,
+  });
+
+  final AuthProfileViewMode viewMode;
 
   @override
   State<AuthProfilePage> createState() => _AuthProfilePageState();
@@ -418,9 +428,9 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
 
                             return Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF7FBFF),
+                                color: const Color(0xFFF8F9FA),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE0ECFF)),
+                                border: Border.all(color: const Color(0xFFF8F9FA)),
                               ),
                               child: ListTile(
                                 title: Text(
@@ -546,13 +556,6 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
       _notificationSettingsCache = null;
       _notificationSettingsFuture = _loadNotificationSettings();
     });
-  }
-
-  void _openOrdersPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const OrdersPage()),
-    );
   }
 
   Future<SupportInfoModel?> _loadSupportInfo() async {
@@ -710,20 +713,52 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     );
   }
 
+  String _pageTitle() {
+    switch (widget.viewMode) {
+      case AuthProfileViewMode.profile:
+        return 'Profile';
+      case AuthProfileViewMode.wishlist:
+        return 'Wishlist';
+      case AuthProfileViewMode.savedAddresses:
+        return 'Saved Addresses';
+      case AuthProfileViewMode.settings:
+        return 'Settings';
+      case AuthProfileViewMode.helpSupport:
+        return 'Help & Support';
+    }
+  }
+
+  List<Widget> _sectionsForProfile(UserProfileModel profile) {
+    switch (widget.viewMode) {
+      case AuthProfileViewMode.profile:
+        return [
+          _buildProfileHeader(profile),
+          _buildAccountDetails(profile),
+          _buildAddressSection(profile),
+          _buildUtilitiesSection(),
+        ];
+      case AuthProfileViewMode.wishlist:
+        return [_buildWishlistSection()];
+      case AuthProfileViewMode.savedAddresses:
+        return [_buildAddressSection(profile)];
+      case AuthProfileViewMode.settings:
+        return [_buildNotificationSection()];
+      case AuthProfileViewMode.helpSupport:
+        return [_buildSupportSection()];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: Text(_pageTitle()),
+        backgroundColor: const Color(0xFFFAF7F2),
+        foregroundColor: const Color(0xFF3F3527),
+        elevation: 0,
       ),
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFE9F2FF), Color(0xFFF8FBFF), Colors.white],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+        color: const Color(0xFFFAF7F2),
         child: _isBootstrapping
             ? const Center(child: CircularProgressIndicator())
             : _bootstrapError != null
@@ -733,7 +768,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.cloud_off_outlined, color: Colors.blue, size: 44),
+                          const Icon(Icons.cloud_off_outlined, color: const Color(0xFFFFC107), size: 44),
                           const SizedBox(height: 10),
                           const Text('Coming Soon', textAlign: TextAlign.center),
                           const SizedBox(height: 10),
@@ -769,22 +804,20 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                           builder: (context, constraints) {
                             final isWide = constraints.maxWidth > 680;
 
-                            final sections = [
-                              _buildProfileHeader(profile),
-                              _buildAccountDetails(profile),
-                              _buildAddressSection(profile),
-                              _buildWishlistSection(),
-                              _buildNotificationSection(),
-                              _buildOrderSection(),
-                              _buildSupportSection(),
-                              _buildUtilitiesSection(),
-                              _buildLogoutSection(),
-                            ];
+                            final sections = _sectionsForProfile(profile);
 
                             if (!isWide) {
                               return ListView(
                                 physics: const AlwaysScrollableScrollPhysics(),
                                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
+                                children: sections,
+                              );
+                            }
+
+                            if (widget.viewMode != AuthProfileViewMode.profile) {
+                              return ListView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
                                 children: sections,
                               );
                             }
@@ -803,8 +836,6 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                                         children: [
                                           sections[1],
                                           sections[2],
-                                          sections[3],
-                                          sections[4],
                                         ],
                                       ),
                                     ),
@@ -812,10 +843,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                                     Expanded(
                                       child: Column(
                                         children: [
-                                          sections[5],
-                                          sections[6],
-                                          sections[7],
-                                          sections[8],
+                                          sections[3],
                                         ],
                                       ),
                                     ),
@@ -843,17 +871,18 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        color: const Color(0xFFF5E6C8),
+        borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
-          colors: [Color(0xFF0959D7), Color(0xFF3C8EFF), Color(0xFF79B5FF)],
+          colors: [Color(0xFFF6E9CF), Color(0xFFF1DFC0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x3D3A8BFF),
-            blurRadius: 28,
-            offset: Offset(0, 14),
+            color: const Color(0xFF8B7355).withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -861,11 +890,11 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
         children: [
           CircleAvatar(
             radius: 40,
-            backgroundColor: Colors.white.withValues(alpha: 0.24),
+            backgroundColor: Colors.white.withValues(alpha: 0.72),
             child: const Icon(
               Icons.person_rounded,
               size: 44,
-              color: Colors.white,
+              color: Color(0xFF8F6B2E),
             ),
           ),
           const SizedBox(width: 12),
@@ -878,9 +907,10 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
+                    fontFamily: 'Poppins',
+                    color: Color(0xFF3F3527),
                     fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -889,8 +919,10 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
+                    fontFamily: 'Poppins',
+                    color: Color(0xFF7B6A55),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
@@ -963,9 +995,9 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF7FBFF),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2EDFF)),
+                  color: const Color(0xFFFCF8F2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF0E4D2)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,7 +1013,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                             margin: const EdgeInsets.only(left: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0B63F6),
+                              color: const Color(0xFFD4B06A),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: const Text(
@@ -1067,9 +1099,9 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF7FBFF),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE2EDFF)),
+                      color: const Color(0xFFFCF8F2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFF0E4D2)),
                     ),
                     child: Row(
                       children: [
@@ -1077,10 +1109,10 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEAF3FF),
+                            color: const Color(0xFFF6EBDD),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFF0B63F6)),
+                          child: const Icon(Icons.shopping_bag_outlined, color: Color(0xFFB0893C)),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -1091,10 +1123,16 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                                 name.isNotEmpty ? name : 'Nothing found',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w700),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF3F3527),
+                                ),
                               ),
                               if (price.isNotEmpty)
-                                Text('₹$price', style: const TextStyle(color: Color(0xFF516480))),
+                                Text(
+                                  '₹$price',
+                                  style: const TextStyle(color: Color(0xFF8B7B66)),
+                                ),
                             ],
                           ),
                         ),
@@ -1202,21 +1240,6 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     );
   }
 
-  Widget _buildOrderSection() {
-    return ProfileSectionCard(
-      title: 'My Orders',
-      subtitle: 'Track and manage your existing orders',
-      icon: Icons.receipt_long_outlined,
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Go to My Orders', style: TextStyle(fontWeight: FontWeight.w700)),
-        subtitle: const Text('Open your live order history page'),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: _openOrdersPage,
-      ),
-    );
-  }
-
   Widget _buildSupportSection() {
     return ProfileSectionCard(
       title: 'Help & Support',
@@ -1255,12 +1278,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7FBFF),
+                    color: const Color(0xFFF8F9FA),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                    border: Border.all(color: const Color(0xFFF8F9FA)),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.call_outlined, color: Color(0xFF0B63F6)),
+                    leading: const Icon(Icons.call_outlined, color: Color(0xFFFFC107)),
                     title: const Text('Phone', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.phone),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1271,12 +1294,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7FBFF),
+                    color: const Color(0xFFF8F9FA),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                    border: Border.all(color: const Color(0xFFF8F9FA)),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.chat_outlined, color: Color(0xFF0B63F6)),
+                    leading: const Icon(Icons.chat_outlined, color: Color(0xFFFFC107)),
                     title: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.whatsapp),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1287,12 +1310,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF7FBFF),
+                    color: const Color(0xFFF8F9FA),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE2EDFF)),
+                    border: Border.all(color: const Color(0xFFF8F9FA)),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.email_outlined, color: Color(0xFF0B63F6)),
+                    leading: const Icon(Icons.email_outlined, color: Color(0xFFFFC107)),
                     title: const Text('Email', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.email),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1349,73 +1372,6 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     );
   }
 
-  Widget _buildLogoutSection() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF5F5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFDADA)),
-      ),
-      child: ListTile(
-        leading: const Icon(Icons.logout, color: Colors.red),
-        title: const Text(
-          'Logout',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Colors.red,
-          ),
-        ),
-        onTap: _showLogoutConfirmation,
-      ),
-    );
-  }
-
-  Future<void> _showLogoutConfirmation() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text(
-                'Logout',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout != true) {
-      return;
-    }
-
-    await FirebaseAuth.instance.signOut();
-
-    if (!mounted) {
-      return;
-    }
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => LoginPage(
-          cartNotifier: ValueNotifier<List<CartItem>>([]),
-        ),
-      ),
-      (route) => false,
-    );
-  }
-
   Widget _utilityTile({
     required IconData icon,
     required String title,
@@ -1424,13 +1380,19 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7FBFF),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE2EDFF)),
+        color: const Color(0xFFFCF8F2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF0E4D2)),
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF0B63F6)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        leading: Icon(icon, color: const Color(0xFFB0893C)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF3F3527),
+          ),
+        ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,
       ),
@@ -1458,7 +1420,7 @@ class AppContentPage extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE9F2FF), Color(0xFFF8FBFF), Colors.white],
+            colors: [Color(0xFFF8F9FA), Color(0xFFF8FBFF), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -1506,7 +1468,7 @@ class AppContentPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFDDEBFF)),
+                    border: Border.all(color: const Color(0xFFF8F9FA)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

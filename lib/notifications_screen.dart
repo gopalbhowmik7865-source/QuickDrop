@@ -66,7 +66,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: Colors.blue.shade700,
+        backgroundColor: const Color(0xFFFFC107),
         foregroundColor: Colors.white,
       ),
       body: FutureBuilder<String?>(
@@ -174,12 +174,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEAF3FF),
+                            color: const Color(0xFFF8F9FA),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Icon(
                             _iconFromKind(kind),
-                            color: const Color(0xFF1D4ED8),
+                            color: const Color(0xFFFFC107),
                             size: 20,
                           ),
                         ),

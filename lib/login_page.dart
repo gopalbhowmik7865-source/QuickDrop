@@ -270,20 +270,20 @@ class _LoginPageState extends State<LoginPage> {
       labelText: label,
       prefixIcon: icon == null
           ? null
-          : Icon(icon, color: const Color(0xFF0B63F6)),
+          : Icon(icon, color: const Color(0xFFFFC107)),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.blue.shade100),
+        borderSide: BorderSide(color: const Color(0xFFF8F9FA)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.blue.shade100),
+        borderSide: BorderSide(color: const Color(0xFFF8F9FA)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF0B63F6), width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFFFFC107), width: 1.5),
       ),
     );
   }
@@ -294,7 +294,7 @@ class _LoginPageState extends State<LoginPage> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFEAF3FF), Colors.white],
+            colors: [Color(0xFFF8F9FA), Colors.white],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -311,7 +311,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
                       child: Image.asset(
-                        'lib/assets/images/file_000000007bc4720796b22bf2c89f8dc7.png',
+                        'assets/logos/quickdrop_go_logo.png',
                         width: 96,
                         height: 96,
                         fit: BoxFit.cover,
@@ -325,7 +325,7 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF0B63F6),
+                      color: Color(0xFFFFC107),
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -353,7 +353,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _sendOtp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0B63F6),
+                        backgroundColor: const Color(0xFFFFC107),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -385,7 +385,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _verifyOtp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0B63F6),
+                        backgroundColor: const Color(0xFFFFC107),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),

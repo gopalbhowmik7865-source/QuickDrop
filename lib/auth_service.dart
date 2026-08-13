@@ -11,7 +11,13 @@ class AuthService {
   static const String _prefsPhoneKey = 'user_phone';
   static const String _prefsAddressKey = 'user_address';
 
-  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  AuthService({FirebaseAuth? firebaseAuth})
+    : _injectedFirebaseAuth = firebaseAuth;
+
+  final FirebaseAuth? _injectedFirebaseAuth;
+
+  FirebaseAuth get _firebaseAuth =>
+      _injectedFirebaseAuth ?? FirebaseAuth.instance;
 
   void _log(String message) {
     developer.log(message, name: 'QuickDropAuth');
@@ -95,7 +101,8 @@ class AuthService {
     final storedLoggedIn = prefs.getBool(_prefsLoggedInKey) ?? false;
     final storedName = prefs.getString(_prefsNameKey);
     final storedPhone = prefs.getString(_prefsPhoneKey);
-    final verified = savedLoggedIn &&
+    final verified =
+        savedLoggedIn &&
         savedName &&
         savedPhone &&
         storedLoggedIn &&
@@ -134,16 +141,16 @@ class AuthService {
       'startup session check: user_logged_in=$loggedIn, phone=$phone, '
       'name=$name, hasRequiredData=$hasRequiredData',
     );
-    debugPrint(
-      'QuickDropAuth startup: user_logged_in=$loggedIn, phone=$phone',
-    );
+    debugPrint('QuickDropAuth startup: user_logged_in=$loggedIn, phone=$phone');
 
     if (loggedIn && hasRequiredData) {
       return true;
     }
 
     if (loggedIn && !hasRequiredData) {
-      _log('startup session check: partial session found, keeping it until logout.');
+      _log(
+        'startup session check: partial session found, keeping it until logout.',
+      );
     }
 
     return false;
@@ -214,7 +221,10 @@ class AuthService {
     }
 
     final savedName = await prefs.setString(_prefsNameKey, name.trim());
-    final savedAddress = await prefs.setString(_prefsAddressKey, address.trim());
+    final savedAddress = await prefs.setString(
+      _prefsAddressKey,
+      address.trim(),
+    );
 
     _log(
       'updateCurrentUserProfile: savedName=$savedName, '
