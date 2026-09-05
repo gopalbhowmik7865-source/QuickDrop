@@ -187,6 +187,7 @@ test('admin claim permits operations while an ordinary user cannot impersonate a
 
 test('assigned rider can read only their assigned order', async () => {
   await seed([
+    [['delivery_partners', 'riderA'], riderProfile('assigned')],
     [['orders', 'assigned'], order('customerA', { assignedPartnerId: 'riderA' })],
     [['orders', 'unassigned'], order('customerA')],
     [['orders', 'other-rider'], order('customerA', { assignedPartnerId: 'riderB' })],
@@ -195,6 +196,23 @@ test('assigned rider can read only their assigned order', async () => {
   await assertSucceeds(getDoc(doc(db, 'orders', 'assigned')));
   await assertFails(getDoc(doc(db, 'orders', 'unassigned')));
   await assertFails(getDoc(doc(db, 'orders', 'other-rider')));
+});
+
+test('inactive rider with a stale deliveryPartner claim cannot read an assigned order', async () => {
+  await seed([
+    [['delivery_partners', 'riderA'], riderProfile('inactive-read', { isActive: false })],
+    [['orders', 'inactive-read'], order('customerA', { assignedPartnerId: 'riderA' })],
+  ]);
+  await assertFails(getDoc(doc(riderDb('riderA'), 'orders', 'inactive-read')));
+});
+
+test('inactive rider with a stale deliveryPartner claim cannot update an assigned order', async () => {
+  await seedAssignedOrder('inactive-update', 'Pending', { isActive: false });
+  await assertFails(updateDoc(doc(riderDb('riderA'), 'orders', 'inactive-update'), {
+    status: 'Accepted',
+    statusUpdatedAt: serverTimestamp(),
+    statusHistory: [{ status: 'Accepted', updatedAt: new Date() }],
+  }));
 });
 
 test('rider cannot self-assign or change an order assignment', async () => {
@@ -275,7 +293,26 @@ test('rider can update legitimate operational profile fields only', async () => 
     lastLocationUpdatedAt: serverTimestamp(),
   }));
   await assertFails(updateDoc(profileRef, { currentOrderId: 'different-order' }));
+  await assertFails(updateDoc(profileRef, { isActive: false }));
   await assertFails(updateDoc(profileRef, { name: 'Changed by rider' }));
+});
+
+test('inactive rider cannot bypass the active check through duty or availability fields', async () => {
+  await seed([[['delivery_partners', 'riderA'], riderProfile('', {
+    isActive: false,
+    isOnDuty: false,
+    availabilityStatus: 'offline',
+  })]]);
+  const profileRef = doc(riderDb('riderA'), 'delivery_partners', 'riderA');
+  await assertFails(updateDoc(profileRef, {
+    isOnDuty: true,
+    availabilityStatus: 'available',
+  }));
+  await assertFails(updateDoc(profileRef, {
+    isActive: true,
+    isOnDuty: true,
+    availabilityStatus: 'available',
+  }));
 });
 
 test('rider availability values and types are validated', async () => {
@@ -320,6 +357,34 @@ test('order owner and assigned rider can use chat; unrelated users cannot', asyn
   await assertSucceeds(getDoc(doc(customerDb('customerA'), 'orders', 'chat-order', 'messages', 'message-2')));
   await assertFails(getDoc(doc(customerDb('customerB'), 'orders', 'chat-order', 'messages', 'message-1')));
   await assertFails(getDoc(doc(riderDb('riderB'), 'orders', 'chat-order', 'messages', 'message-1')));
+});
+
+test('inactive rider with a stale claim cannot read or write assigned-order chat', async () => {
+  await seed([
+    [['orders', 'inactive-chat'], order('customerA', { assignedPartnerId: 'riderA' })],
+    [['delivery_partners', 'riderA'], riderProfile('inactive-chat', { isActive: false })],
+    [[
+      'orders',
+      'inactive-chat',
+      'messages',
+      'customer-message',
+    ], message('customerA', 'customer')],
+  ]);
+  const rider = riderDb('riderA');
+  await assertFails(getDoc(doc(
+    rider,
+    'orders',
+    'inactive-chat',
+    'messages',
+    'customer-message',
+  )));
+  await assertFails(setDoc(doc(
+    rider,
+    'orders',
+    'inactive-chat',
+    'messages',
+    'rider-message',
+  ), message('riderA', 'deliveryPartner')));
 });
 
 test('chat receipts progress monotonically and cannot have timestamps rewritten', async () => {

@@ -16,6 +16,16 @@ service cloud.firestore {
         && request.auth.token.get('deliveryPartner', false) == true;
     }
 
+    // The claim establishes the role, while this server-owned profile field
+    // establishes whether that rider may currently operate. A missing profile
+    // makes the get() evaluation fail closed, denying rider-only access.
+    function hasActiveDeliveryPartnerProfile() {
+      let rider = get(
+        /databases/$(database)/documents/delivery_partners/$(request.auth.uid)
+      ).data;
+      return isDeliveryPartner() && rider.get('isActive', false) == true;
+    }
+
     function isOwnDeliveryPartnerProfile(partnerId) {
       return isDeliveryPartner() && request.auth.uid == partnerId;
     }
@@ -27,7 +37,7 @@ service cloud.firestore {
     }
 
     function assignedRiderFor(orderData) {
-      return isDeliveryPartner()
+      return hasActiveDeliveryPartnerProfile()
         && orderData.get('assignedPartnerId', '') == request.auth.uid;
     }
 
@@ -83,6 +93,7 @@ service cloud.firestore {
       allow read, write: if isAdmin();
       allow get: if isOwnDeliveryPartnerProfile(partnerId);
       allow update: if isOwnDeliveryPartnerProfile(partnerId)
+        && hasActiveDeliveryPartnerProfile()
         && hasValidRiderOperationalUpdate();
     }
 
@@ -95,7 +106,7 @@ service cloud.firestore {
     // Delivery partners need the existing Admin-managed hub coordinates to
     // navigate to the store. This exact-document get grants no list or write.
     match /settings/app {
-      allow get: if isDeliveryPartner();
+      allow get: if hasActiveDeliveryPartnerProfile();
     }
 
     function isUnassignedCustomerOrder() {
@@ -174,7 +185,7 @@ service cloud.firestore {
       let rider = get(
         /databases/$(database)/documents/delivery_partners/$(request.auth.uid)
       ).data;
-      return rider.get('isActive', false) == true
+      return hasActiveDeliveryPartnerProfile()
         && rider.get('isOnDuty', false) == true
         && rider.get('currentOrderId', '') == orderId;
     }
