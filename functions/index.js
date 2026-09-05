@@ -46,6 +46,8 @@ function normalizeStatus(value) {
       return 'outForDelivery';
     case 'delivered':
       return 'delivered';
+    case 'rejected':
+      return 'rejected';
     case 'cancelled':
     case 'canceled':
       return 'cancelled';
@@ -273,4 +275,81 @@ exports.notifyNewUserRegistered = onDocumentCreated('user_profiles/{profileId}',
       }),
     ),
   );
+});
+
+// Customers cannot read `delivery_partners` (credentials stay admin-only), so
+// the assigned rider's public contact details are mirrored onto the order.
+exports.mirrorAssignedPartnerDetails = onDocumentUpdated('orders/{orderDocId}', async (event) => {
+  const before = event.data?.before?.data() || {};
+  const after = event.data?.after?.data() || {};
+  const partnerId = String(after.assignedPartnerId || '').trim();
+
+  if (partnerId === String(before.assignedPartnerId || '').trim()) {
+    return;
+  }
+
+  if (!partnerId) {
+    await event.data.after.ref.update({
+      assignedPartnerName: admin.firestore.FieldValue.delete(),
+      assignedPartnerPhone: admin.firestore.FieldValue.delete(),
+    });
+    return;
+  }
+
+  const partner = await db.collection('delivery_partners').doc(partnerId).get();
+  if (!partner.exists) {
+    logger.warn('Assigned partner not found; skipping mirror.', { partnerId });
+    return;
+  }
+
+  const partnerData = partner.data() || {};
+  await event.data.after.ref.update({
+    assignedPartnerName: String(partnerData.name || '').trim(),
+    assignedPartnerPhone: String(partnerData.phone || '').trim(),
+  });
+});
+
+exports.deliveryPartnerLogin =
+  require('./delivery_partner_auth').deliveryPartnerLogin;
+
+// Riders cannot write `currentOrderId` (admin-only collection), so the trusted
+// backend releases the rider once the assigned order reaches a terminal state.
+exports.releaseRiderOnOrderDelivered = onDocumentUpdated('orders/{orderDocId}', async (event) => {
+  const before = event.data?.before?.data() || {};
+  const after = event.data?.after?.data() || {};
+  const previousStatus = normalizeStatus(before.status);
+  const nextStatus = normalizeStatus(after.status);
+
+  if (!['delivered', 'cancelled', 'rejected'].includes(nextStatus)
+    || previousStatus === nextStatus) {
+    return;
+  }
+
+  const partnerId = String(after.assignedPartnerId || '').trim();
+  if (!partnerId) {
+    return;
+  }
+
+  const orderDocId = event.params.orderDocId;
+  const riderRef = db.collection('delivery_partners').doc(partnerId);
+
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(riderRef);
+    if (!snapshot.exists) {
+      logger.warn('Assigned partner not found; skipping release.', { partnerId });
+      return;
+    }
+
+    const rider = snapshot.data() || {};
+    if (String(rider.currentOrderId || '').trim() !== orderDocId) {
+      return;
+    }
+
+    transaction.update(riderRef, {
+      currentOrderId: '',
+      currentOrderAssignedAt: admin.firestore.FieldValue.delete(),
+      availabilityStatus: rider.isOnDuty === true ? 'available' : 'offline',
+      currentOrderReleasedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
 });

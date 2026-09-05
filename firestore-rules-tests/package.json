@@ -1,0 +1,14 @@
+{
+  "name": "quickdrop-firestore-rules-tests",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Local Firestore Emulator authorization tests for QuickDrop",
+  "scripts": {
+    "test": "node --test firestore.rules.test.js",
+    "test:emulator": "firebase --config ../firebase.emulator.json emulators:exec --only firestore --project quickdrop-rules-test \"npm test\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase-tools": "^14.24.2"
+  }
+}

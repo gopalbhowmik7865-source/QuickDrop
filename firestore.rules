@@ -1,0 +1,313 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && request.auth.token.get('admin', false) == true;
+    }
+
+    function isDeliveryPartner() {
+      return isAuthenticated()
+        && request.auth.token.get('deliveryPartner', false) == true;
+    }
+
+    function isOwnDeliveryPartnerProfile(partnerId) {
+      return isDeliveryPartner() && request.auth.uid == partnerId;
+    }
+
+    function isOrderOwner(orderData) {
+      return isAuthenticated()
+        && !isDeliveryPartner()
+        && orderData.get('ownerUid', '') == request.auth.uid;
+    }
+
+    function assignedRiderFor(orderData) {
+      return isDeliveryPartner()
+        && orderData.get('assignedPartnerId', '') == request.auth.uid;
+    }
+
+    // These are the only values written by the current Delivery App.
+    function hasValidAvailabilityStatus(profile) {
+      return profile.get('availabilityStatus', '') in [
+        'offline',
+        'available',
+        'assigned',
+        'on_delivery',
+      ];
+    }
+
+    function hasValidOperationalLocationChange() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return !changed.hasAny([
+          'latitude',
+          'longitude',
+          'lastLocationUpdatedAt',
+        ])
+        || (changed.hasAll([
+              'latitude',
+              'longitude',
+              'lastLocationUpdatedAt',
+            ])
+            && request.resource.data.latitude is number
+            && request.resource.data.latitude >= -90
+            && request.resource.data.latitude <= 90
+            && request.resource.data.longitude is number
+            && request.resource.data.longitude >= -180
+            && request.resource.data.longitude <= 180
+            && request.resource.data.lastLocationUpdatedAt == request.time);
+    }
+
+    function hasValidRiderOperationalUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'isOnDuty',
+            'availabilityStatus',
+            'latitude',
+            'longitude',
+            'lastLocationUpdatedAt',
+          ])
+        && request.resource.data.isOnDuty is bool
+        && hasValidAvailabilityStatus(request.resource.data)
+        && hasValidOperationalLocationChange();
+    }
+
+    // Public/operational profile. A rider needs this exact document for duty,
+    // availability, assignment state, and location; all other profile changes
+    // remain admin-owned.
+    match /delivery_partners/{partnerId} {
+      allow read, write: if isAdmin();
+      allow get: if isOwnDeliveryPartnerProfile(partnerId);
+      allow update: if isOwnDeliveryPartnerProfile(partnerId)
+        && hasValidRiderOperationalUpdate();
+    }
+
+    // This collection is deliberately inaccessible to every client. Callable
+    // Functions and Admin SDK migrations bypass Firestore rules.
+    match /delivery_partner_credentials/{partnerId} {
+      allow read, write: if false;
+    }
+
+    // Delivery partners need the existing Admin-managed hub coordinates to
+    // navigate to the store. This exact-document get grants no list or write.
+    match /settings/app {
+      allow get: if isDeliveryPartner();
+    }
+
+    function isUnassignedCustomerOrder() {
+      return request.resource.data.get('ownerUid', '') == request.auth.uid
+        && request.resource.data.get('status', '') == 'Pending'
+        && request.resource.data.keys().hasAll([
+          'orderId',
+          'ownerPhone',
+          'ownerUid',
+          'ownerName',
+          'name',
+          'phone',
+          'address',
+          'customerName',
+          'phoneNumber',
+          'deliveryAddress',
+          'paymentMethod',
+          'paymentStatus',
+          'latitude',
+          'longitude',
+          'items',
+          'subtotal',
+          'deliveryCharge',
+          'totalAmount',
+          'status',
+          'statusUpdatedAt',
+          'statusHistory',
+          'createdAt',
+        ])
+        && request.resource.data.keys().hasOnly([
+          'orderId',
+          'ownerPhone',
+          'ownerUid',
+          'ownerName',
+          'name',
+          'phone',
+          'address',
+          'customerName',
+          'phoneNumber',
+          'deliveryAddress',
+          'paymentMethod',
+          'paymentStatus',
+          'latitude',
+          'longitude',
+          'items',
+          'subtotal',
+          'deliveryCharge',
+          'totalAmount',
+          'status',
+          'statusUpdatedAt',
+          'statusHistory',
+          'createdAt',
+          'storeId',
+          'shopNameSnapshot',
+          'shopAddressSnapshot',
+          'pickupName',
+          'pickupAddress',
+          'pickupLatitude',
+          'pickupLongitude',
+          'paymentId',
+        ]);
+    }
+
+    // Customer cancellation is the sole customer-side mutation prepared here.
+    // The current Customer App does not issue it yet, but a future cancellation
+    // UI may move only an unaccepted order from Pending to Cancelled.
+    function isCustomerCancellation() {
+      return resource.data.get('status', '') == 'Pending'
+        && request.resource.data.get('status', '') == 'Cancelled'
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'statusUpdatedAt'])
+        && request.resource.data.statusUpdatedAt == request.time;
+    }
+
+    function riderHasCurrentReservation(orderId) {
+      let rider = get(
+        /databases/$(database)/documents/delivery_partners/$(request.auth.uid)
+      ).data;
+      return rider.get('isActive', false) == true
+        && rider.get('isOnDuty', false) == true
+        && rider.get('currentOrderId', '') == orderId;
+    }
+
+    function isAllowedRiderStatusTransition(oldStatus, newStatus) {
+      return (oldStatus == 'Pending'
+            && (newStatus == 'Accepted' || newStatus == 'Rejected'))
+        || (oldStatus == 'Accepted' && newStatus == 'Going to Store')
+        || (oldStatus == 'Going to Store' && newStatus == 'Reached Store')
+        || (oldStatus == 'Reached Store' && newStatus == 'Order Collected')
+        || (oldStatus == 'Order Collected' && newStatus == 'Out for Delivery')
+        || (oldStatus == 'Out for Delivery' && newStatus == 'Delivered');
+    }
+
+    function isRiderOrderStatusUpdate(orderId) {
+      let oldStatus = resource.data.get('status', '');
+      let newStatus = request.resource.data.get('status', '');
+      let rider = get(
+        /databases/$(database)/documents/delivery_partners/$(request.auth.uid)
+      ).data;
+      return assignedRiderFor(resource.data)
+        && riderHasCurrentReservation(orderId)
+        // A reserved Pending order must remain explicitly assigned until the
+        // rider accepts or rejects it; riders cannot accept while merely idle.
+        && (oldStatus != 'Pending'
+            || rider.get('availabilityStatus', '') == 'assigned')
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'statusUpdatedAt', 'statusHistory'])
+        && request.resource.data.statusUpdatedAt == request.time
+        && isAllowedRiderStatusTransition(oldStatus, newStatus);
+    }
+
+    match /orders/{orderId} {
+      // Admin clients retain full operational access through the verified
+      // custom claim. Customers and riders are scoped below.
+      allow read, write: if isAdmin();
+
+      allow create: if isAuthenticated()
+        && !isDeliveryPartner()
+        && isUnassignedCustomerOrder();
+      allow get, list: if isOrderOwner(resource.data)
+        || assignedRiderFor(resource.data);
+      allow update: if isOrderOwner(resource.data)
+        && isCustomerCancellation();
+      allow update: if isRiderOrderStatusUpdate(orderId);
+      allow delete: if false;
+    }
+
+    // Order chat is restricted to the UID owner, the order's assigned rider,
+    // and administrators. There is intentionally no ownerPhone fallback.
+    match /orders/{orderId}/messages/{messageId} {
+      function orderData() {
+        return get(/databases/$(database)/documents/orders/$(orderId)).data;
+      }
+
+      function isAssignedPartner() {
+        return assignedRiderFor(orderData());
+      }
+
+      function isOrderCustomer() {
+        return isOrderOwner(orderData());
+      }
+
+      function isChatParticipant() {
+        return isOrderCustomer() || isAssignedPartner();
+      }
+
+      function isValidMessage(senderType) {
+        return request.resource.data.senderId == request.auth.uid
+          && request.resource.data.senderType == senderType
+          && request.resource.data.senderName is string
+          && request.resource.data.senderName.size() > 0
+          && request.resource.data.message is string
+          && request.resource.data.message.size() > 0
+          && request.resource.data.message.size() <= 2000
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.isDelivered == false
+          && request.resource.data.isSeen == false
+          && request.resource.data.keys().hasOnly([
+            'senderId',
+            'senderType',
+            'senderName',
+            'message',
+            'createdAt',
+            'isDelivered',
+            'deliveredAt',
+            'isSeen',
+            'seenAt',
+          ]);
+      }
+
+      // Only the recipient may change receipts. A delivered or seen receipt
+      // cannot be moved backwards and its timestamp cannot be rewritten.
+      function hasMonotonicReceipts() {
+        let wasDelivered = resource.data.get('isDelivered', false) == true;
+        let wasSeen = resource.data.get('isSeen', false) == true;
+        return resource.data.senderId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['isDelivered', 'deliveredAt', 'isSeen', 'seenAt'])
+          && request.resource.data.isDelivered == true
+          && (wasDelivered
+              ? request.resource.data.get('deliveredAt', null)
+                  == resource.data.get('deliveredAt', null)
+              : request.resource.data.get('deliveredAt', null) == request.time)
+          && (wasSeen
+              ? request.resource.data.isSeen == true
+                  && request.resource.data.get('seenAt', null)
+                      == resource.data.get('seenAt', null)
+              : (request.resource.data.isSeen == false
+                  && request.resource.data.get('seenAt', null)
+                      == resource.data.get('seenAt', null))
+                || (request.resource.data.isSeen == true
+                    && request.resource.data.get('seenAt', null)
+                        == request.time));
+      }
+
+      allow read: if isAdmin() || isChatParticipant();
+      allow create: if (isAssignedPartner()
+          && isValidMessage('deliveryPartner'))
+        || (isOrderCustomer() && isValidMessage('customer'));
+      allow update: if isChatParticipant() && hasMonotonicReceipts();
+      allow delete: if false;
+    }
+
+    // Existing unrelated collection behavior is intentionally left alone in
+    // this security stage. The explicit exclusions ensure it can never reopen
+    // order, order-chat, rider-profile, or private-credential access.
+    match /{document=**} {
+      allow read, write: if isAuthenticated()
+        && !isDeliveryPartner()
+        && request.path[3] != 'delivery_partners'
+        && request.path[3] != 'delivery_partner_credentials'
+        && request.path[3] != 'orders';
+    }
+  }
+}
