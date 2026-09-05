@@ -312,6 +312,11 @@ exports.mirrorAssignedPartnerDetails = onDocumentUpdated('orders/{orderDocId}', 
 exports.deliveryPartnerLogin =
   require('./delivery_partner_auth').deliveryPartnerLogin;
 
+// Future OTP sign-ins use Firebase's authenticated UID and phone provider.
+// The current PIN/custom-token test-rider login remains exported above.
+exports.completeApprovedRiderPhoneLogin =
+  require('./approved_rider_otp_auth').completeApprovedRiderPhoneLogin;
+
 // Riders cannot write `currentOrderId` (admin-only collection), so the trusted
 // backend releases the rider once the assigned order reaches a terminal state.
 exports.releaseRiderOnOrderDelivered = onDocumentUpdated('orders/{orderDocId}', async (event) => {
