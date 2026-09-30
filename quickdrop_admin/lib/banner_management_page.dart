@@ -15,6 +15,7 @@ class BannerManagementPage extends StatefulWidget {
 class _BannerManagementPageState extends State<BannerManagementPage> {
   Uint8List? _selectedImage;
   String _contentType = 'image/jpeg';
+  final TextEditingController _orderController = TextEditingController(text: '0');
   bool _isUploading = false;
 
   Future<void> _selectImage() async {
@@ -72,7 +73,8 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
         'imageUrl': imageUrl,
         'createdAt': FieldValue.serverTimestamp(),
         'isActive': true,
-        'displayOrder': 0,
+        'order': int.tryParse(_orderController.text.trim()) ?? 0,
+        'displayOrder': int.tryParse(_orderController.text.trim()) ?? 0,
       });
 
       if (!mounted) return;
@@ -94,6 +96,88 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
         });
       }
     }
+  }
+
+  Future<void> _replaceBanner(
+    DocumentReference<Map<String, dynamic>> document,
+    String oldImageUrl,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    final file = result.files.first;
+    if (file.bytes == null || file.bytes!.isEmpty) return;
+
+    try {
+      final extension = file.extension?.toLowerCase() ?? 'jpg';
+      final contentType = switch (extension) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg',
+      };
+      final reference = FirebaseStorage.instance.ref(
+        'banners/${DateTime.now().millisecondsSinceEpoch}.$extension',
+      );
+      await reference.putData(
+        file.bytes!,
+        SettableMetadata(contentType: contentType),
+      );
+      final imageUrl = await reference.getDownloadURL();
+      await document.update({'imageUrl': imageUrl});
+      if (oldImageUrl.isNotEmpty) {
+        try {
+          await FirebaseStorage.instance.refFromURL(oldImageUrl).delete();
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Banner image replaced successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to replace banner: $error')),
+      );
+    }
+  }
+
+  Future<void> _editBannerOrder(
+    DocumentReference<Map<String, dynamic>> document,
+    int currentOrder,
+  ) async {
+    final controller = TextEditingController(text: '$currentOrder');
+    final order = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Change Banner Order'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Order'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              int.tryParse(controller.text.trim()) ?? currentOrder,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (order == null) return;
+    await document.update({'order': order, 'displayOrder': order});
   }
 
   String _formatUploadDate(dynamic value) {
@@ -195,7 +279,7 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
             final data = document.data();
             final imageUrl = data['imageUrl']?.toString().trim() ?? '';
             final isActive = data['isActive'] as bool? ?? false;
-            final displayOrder = data['displayOrder'] as num? ?? 0;
+            final displayOrder = (data['order'] ?? data['displayOrder']) as num? ?? 0;
 
             return Card(
               clipBehavior: Clip.antiAlias,
@@ -246,13 +330,44 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
                             ],
                           ),
                         ),
-                        IconButton(
-                          tooltip: 'Delete banner',
-                          onPressed: () => _deleteBanner(
-                            document.reference,
-                            imageUrl,
-                          ),
-                          icon: const Icon(Icons.delete_outline),
+                        Column(
+                          children: [
+                            Switch(
+                              value: isActive,
+                              onChanged: (value) => document.reference.update({
+                                'isActive': value,
+                              }),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Replace banner image',
+                                  onPressed: () => _replaceBanner(
+                                    document.reference,
+                                    imageUrl,
+                                  ),
+                                  icon: const Icon(Icons.image_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Change banner order',
+                                  onPressed: () => _editBannerOrder(
+                                    document.reference,
+                                    displayOrder.toInt(),
+                                  ),
+                                  icon: const Icon(Icons.swap_vert),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete banner',
+                                  onPressed: () => _deleteBanner(
+                                    document.reference,
+                                    imageUrl,
+                                  ),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -297,6 +412,15 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
                     label: const Text('Select Banner Image'),
                   ),
                 ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _orderController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Banner order',
+                    hintText: '0',
+                  ),
+                ),
                 if (_selectedImage != null) ...[
                   const SizedBox(height: 16),
                   SizedBox(
@@ -325,5 +449,11 @@ class _BannerManagementPageState extends State<BannerManagementPage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _orderController.dispose();
+    super.dispose();
   }
 }

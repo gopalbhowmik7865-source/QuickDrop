@@ -37,7 +37,8 @@ class ProfileFirestoreService {
   CollectionReference<Map<String, dynamic>> get _paymentMethodsCollection =>
       _firestore.collection('payment_methods');
 
-  CollectionReference<Map<String, dynamic>> get _notificationSettingsCollection =>
+  CollectionReference<Map<String, dynamic>>
+  get _notificationSettingsCollection =>
       _firestore.collection('notification_settings');
 
   static const NotificationSettingsModel _defaultNotificationSettings =
@@ -108,15 +109,25 @@ class ProfileFirestoreService {
     );
   }
 
-  UserProfileModel _mergeProfile(UserProfileModel fallback, Map<String, dynamic>? data) {
-    final firestoreProfile = UserProfileModel.fromFirestore(fallback.userId, data);
+  UserProfileModel _mergeProfile(
+    UserProfileModel fallback,
+    Map<String, dynamic>? data,
+  ) {
+    final firestoreProfile = UserProfileModel.fromFirestore(
+      fallback.userId,
+      data,
+    );
     return UserProfileModel(
       userId: fallback.userId,
-      name: firestoreProfile.name.isNotEmpty ? firestoreProfile.name : fallback.name,
+      name: firestoreProfile.name.isNotEmpty
+          ? firestoreProfile.name
+          : fallback.name,
       phoneNumber: firestoreProfile.phoneNumber.isNotEmpty
           ? firestoreProfile.phoneNumber
           : fallback.phoneNumber,
-      email: firestoreProfile.email.isNotEmpty ? firestoreProfile.email : fallback.email,
+      email: firestoreProfile.email.isNotEmpty
+          ? firestoreProfile.email
+          : fallback.email,
       photoUrl: firestoreProfile.photoUrl.isNotEmpty
           ? firestoreProfile.photoUrl
           : fallback.photoUrl,
@@ -158,24 +169,27 @@ class ProfileFirestoreService {
   }
 
   Stream<UserProfileModel> userProfileStream() {
-    return _broadcast((() async* {
-      final identity = await _resolveIdentity();
-      final fallback = _fallbackProfile(identity);
-      yield fallback;
-
-      try {
-        await for (final snapshot in _usersCollection.doc(identity.uid).snapshots()) {
-          yield _mergeProfile(fallback, snapshot.data());
-        }
-      } catch (error, stackTrace) {
-        _log(
-          'userProfileStream: returning fallback profile due to stream error.',
-          error: error,
-          stackTrace: stackTrace,
-        );
+    return _broadcast(
+      (() async* {
+        final identity = await _resolveIdentity();
+        final fallback = _fallbackProfile(identity);
         yield fallback;
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _usersCollection.doc(identity.uid).snapshots()) {
+            yield _mergeProfile(fallback, snapshot.data());
+          }
+        } catch (error, stackTrace) {
+          _log(
+            'userProfileStream: returning fallback profile due to stream error.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          yield fallback;
+        }
+      })(),
+    );
   }
 
   Future<void> updateUserProfile({
@@ -209,39 +223,45 @@ class ProfileFirestoreService {
   }
 
   Stream<List<AddressModel>> addressStream() {
-    return _broadcast((() async* {
-      final identity = await _resolveIdentity();
-      yield const <AddressModel>[];
-
-      try {
-        await for (final snapshot in _addressesCollection
-            .where('ownerId', isEqualTo: identity.uid)
-            .snapshots()) {
-          final addresses = snapshot.docs
-              .map((doc) => AddressModel.fromFirestore(doc.id, doc.data()))
-              .toList()
-            ..sort((a, b) {
-              final aTime = a.updatedAt ?? a.createdAt;
-              final bTime = b.updatedAt ?? b.createdAt;
-              if (aTime == null && bTime == null) {
-                return 0;
-              }
-              if (aTime == null) {
-                return 1;
-              }
-              if (bTime == null) {
-                return -1;
-              }
-              return bTime.compareTo(aTime);
-            });
-
-          yield addresses;
-        }
-      } catch (error, stackTrace) {
-        _log('addressStream failed.', error: error, stackTrace: stackTrace);
+    return _broadcast(
+      (() async* {
+        final identity = await _resolveIdentity();
         yield const <AddressModel>[];
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _addressesCollection
+                  .where('ownerId', isEqualTo: identity.uid)
+                  .snapshots()) {
+            final addresses =
+                snapshot.docs
+                    .map(
+                      (doc) => AddressModel.fromFirestore(doc.id, doc.data()),
+                    )
+                    .toList()
+                  ..sort((a, b) {
+                    final aTime = a.updatedAt ?? a.createdAt;
+                    final bTime = b.updatedAt ?? b.createdAt;
+                    if (aTime == null && bTime == null) {
+                      return 0;
+                    }
+                    if (aTime == null) {
+                      return 1;
+                    }
+                    if (bTime == null) {
+                      return -1;
+                    }
+                    return bTime.compareTo(aTime);
+                  });
+
+            yield addresses;
+          }
+        } catch (error, stackTrace) {
+          _log('addressStream failed.', error: error, stackTrace: stackTrace);
+          yield const <AddressModel>[];
+        }
+      })(),
+    );
   }
 
   Future<void> addAddress({
@@ -341,36 +361,43 @@ class ProfileFirestoreService {
   }
 
   Stream<List<WishlistItemModel>> wishlistStream() {
-    return _broadcast((() async* {
-      final identity = await _resolveIdentity();
-      yield const <WishlistItemModel>[];
-
-      try {
-        await for (final snapshot in _wishlistCollection
-            .where('ownerId', isEqualTo: identity.uid)
-            .snapshots()) {
-          final items = snapshot.docs
-              .map((doc) => WishlistItemModel.fromFirestore(doc.id, doc.data()))
-              .toList()
-            ..sort((a, b) {
-              if (a.addedAt == null && b.addedAt == null) {
-                return 0;
-              }
-              if (a.addedAt == null) {
-                return 1;
-              }
-              if (b.addedAt == null) {
-                return -1;
-              }
-              return b.addedAt!.compareTo(a.addedAt!);
-            });
-          yield items;
-        }
-      } catch (error, stackTrace) {
-        _log('wishlistStream failed.', error: error, stackTrace: stackTrace);
+    return _broadcast(
+      (() async* {
+        final identity = await _resolveIdentity();
         yield const <WishlistItemModel>[];
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _wishlistCollection
+                  .where('ownerId', isEqualTo: identity.uid)
+                  .snapshots()) {
+            final items =
+                snapshot.docs
+                    .map(
+                      (doc) =>
+                          WishlistItemModel.fromFirestore(doc.id, doc.data()),
+                    )
+                    .toList()
+                  ..sort((a, b) {
+                    if (a.addedAt == null && b.addedAt == null) {
+                      return 0;
+                    }
+                    if (a.addedAt == null) {
+                      return 1;
+                    }
+                    if (b.addedAt == null) {
+                      return -1;
+                    }
+                    return b.addedAt!.compareTo(a.addedAt!);
+                  });
+            yield items;
+          }
+        } catch (error, stackTrace) {
+          _log('wishlistStream failed.', error: error, stackTrace: stackTrace);
+          yield const <WishlistItemModel>[];
+        }
+      })(),
+    );
   }
 
   Future<void> addToWishlist(String productId) async {
@@ -390,42 +417,56 @@ class ProfileFirestoreService {
   }
 
   Future<Map<String, dynamic>?> getProduct(String productId) async {
-    final snapshot = await _firestore.collection('products').doc(productId).get();
+    final snapshot = await _firestore
+        .collection('products')
+        .doc(productId)
+        .get();
     return snapshot.data();
   }
 
   Stream<List<PaymentMethodModel>> paymentMethodStream() {
-    return _broadcast((() async* {
-      final identity = await _resolveIdentity();
-      yield const <PaymentMethodModel>[];
-
-      try {
-        await for (final snapshot in _paymentMethodsCollection
-            .where('ownerId', isEqualTo: identity.uid)
-            .snapshots()) {
-          final methods = snapshot.docs
-              .map((doc) => PaymentMethodModel.fromFirestore(doc.id, doc.data()))
-              .toList()
-            ..sort((a, b) {
-              if (a.updatedAt == null && b.updatedAt == null) {
-                return 0;
-              }
-              if (a.updatedAt == null) {
-                return 1;
-              }
-              if (b.updatedAt == null) {
-                return -1;
-              }
-              return b.updatedAt!.compareTo(a.updatedAt!);
-            });
-
-          yield methods;
-        }
-      } catch (error, stackTrace) {
-        _log('paymentMethodStream failed.', error: error, stackTrace: stackTrace);
+    return _broadcast(
+      (() async* {
+        final identity = await _resolveIdentity();
         yield const <PaymentMethodModel>[];
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _paymentMethodsCollection
+                  .where('ownerId', isEqualTo: identity.uid)
+                  .snapshots()) {
+            final methods =
+                snapshot.docs
+                    .map(
+                      (doc) =>
+                          PaymentMethodModel.fromFirestore(doc.id, doc.data()),
+                    )
+                    .toList()
+                  ..sort((a, b) {
+                    if (a.updatedAt == null && b.updatedAt == null) {
+                      return 0;
+                    }
+                    if (a.updatedAt == null) {
+                      return 1;
+                    }
+                    if (b.updatedAt == null) {
+                      return -1;
+                    }
+                    return b.updatedAt!.compareTo(a.updatedAt!);
+                  });
+
+            yield methods;
+          }
+        } catch (error, stackTrace) {
+          _log(
+            'paymentMethodStream failed.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          yield const <PaymentMethodModel>[];
+        }
+      })(),
+    );
   }
 
   Future<void> savePaymentMethod({
@@ -437,9 +478,13 @@ class ProfileFirestoreService {
     String source = 'profile',
   }) async {
     final identity = await _resolveIdentity();
-    final normalizedProvider = provider.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+    final normalizedProvider = provider.toLowerCase().replaceAll(
+      RegExp(r'\s+'),
+      '_',
+    );
     final normalizedRef = reference.hashCode.abs();
-    final docId = '${identity.uid}_${type.toLowerCase()}_${normalizedProvider}_$normalizedRef';
+    final docId =
+        '${identity.uid}_${type.toLowerCase()}_${normalizedProvider}_$normalizedRef';
     final batch = _firestore.batch();
 
     if (isDefault) {
@@ -471,107 +516,136 @@ class ProfileFirestoreService {
   }
 
   Stream<List<PaymentMethodModel>> recentPaymentMethodsFromOrders() {
-    return _broadcast((() async* {
-      final localPhone = (await _authService.getCurrentUserPhone())?.trim() ?? '';
-      if (localPhone.isEmpty) {
-        yield const <PaymentMethodModel>[];
-        return;
-      }
-
-      try {
-        await for (final snapshot in _firestore
-            .collection('orders')
-            .where('ownerPhone', isEqualTo: localPhone)
-            .snapshots()) {
-          final methods = <PaymentMethodModel>[];
-          final seen = <String>{};
-
-          final docs = [...snapshot.docs]..sort((a, b) {
-            final aDate = _timestampToDateTime(a.data()['createdAt']);
-            final bDate = _timestampToDateTime(b.data()['createdAt']);
-            if (aDate == null && bDate == null) {
-              return 0;
-            }
-            if (aDate == null) {
-              return 1;
-            }
-            if (bDate == null) {
-              return -1;
-            }
-            return bDate.compareTo(aDate);
-          });
-
-          for (final doc in docs.take(20)) {
-            final data = doc.data();
-            final method = (data['paymentMethod'] ?? '').toString().trim();
-            if (method.isEmpty) {
-              continue;
-            }
-
-            final paymentId = (data['paymentId'] ?? '').toString().trim();
-            final key = '$method:$paymentId';
-            if (!seen.add(key)) {
-              continue;
-            }
-
-            methods.add(
-              PaymentMethodModel(
-                id: doc.id,
-                type: 'order',
-                provider: method,
-                reference: paymentId,
-                status: (data['paymentStatus'] ?? '').toString().trim(),
-                isDefault: false,
-                updatedAt: _timestampToDateTime(data['createdAt']),
-                source: 'orders',
-              ),
-            );
-          }
-
-          yield methods;
+    return _broadcast(
+      (() async* {
+        final ownerUid = _auth.currentUser?.uid ?? '';
+        if (ownerUid.isEmpty) {
+          yield const <PaymentMethodModel>[];
+          return;
         }
-      } catch (error, stackTrace) {
-        _log('recentPaymentMethodsFromOrders failed.', error: error, stackTrace: stackTrace);
-        yield const <PaymentMethodModel>[];
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _firestore
+                  .collection('orders')
+                  .where('ownerUid', isEqualTo: ownerUid)
+                  .snapshots()) {
+            final methods = <PaymentMethodModel>[];
+            final seen = <String>{};
+
+            final docs = [...snapshot.docs]
+              ..sort((a, b) {
+                final aDate = _timestampToDateTime(a.data()['createdAt']);
+                final bDate = _timestampToDateTime(b.data()['createdAt']);
+                if (aDate == null && bDate == null) {
+                  return 0;
+                }
+                if (aDate == null) {
+                  return 1;
+                }
+                if (bDate == null) {
+                  return -1;
+                }
+                return bDate.compareTo(aDate);
+              });
+
+            for (final doc in docs.take(20)) {
+              final data = doc.data();
+              final method = (data['paymentMethod'] ?? '').toString().trim();
+              if (method.isEmpty) {
+                continue;
+              }
+
+              final paymentId = (data['paymentId'] ?? '').toString().trim();
+              final key = '$method:$paymentId';
+              if (!seen.add(key)) {
+                continue;
+              }
+
+              methods.add(
+                PaymentMethodModel(
+                  id: doc.id,
+                  type: 'order',
+                  provider: method,
+                  reference: paymentId,
+                  status: (data['paymentStatus'] ?? '').toString().trim(),
+                  isDefault: false,
+                  updatedAt: _timestampToDateTime(data['createdAt']),
+                  source: 'orders',
+                ),
+              );
+            }
+
+            yield methods;
+          }
+        } catch (error, stackTrace) {
+          _log(
+            'recentPaymentMethodsFromOrders failed.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          yield const <PaymentMethodModel>[];
+        }
+      })(),
+    );
   }
 
   Stream<List<CouponModel>> activeCouponsStream() {
-    return _broadcast(_firestore.collection('coupons').snapshots().map((snapshot) {
-      final now = DateTime.now();
-      return snapshot.docs
-          .map((doc) => CouponModel.fromFirestore(doc.id, doc.data()))
-          .where((coupon) {
-            final notExpired = coupon.expiresAt == null || coupon.expiresAt!.isAfter(now);
-            return coupon.isActive && notExpired;
+    return _broadcast(
+      _firestore
+          .collection('coupons')
+          .snapshots()
+          .map((snapshot) {
+            final now = DateTime.now();
+            return snapshot.docs
+                .map((doc) => CouponModel.fromFirestore(doc.id, doc.data()))
+                .where((coupon) {
+                  final notExpired =
+                      coupon.expiresAt == null ||
+                      coupon.expiresAt!.isAfter(now);
+                  return coupon.isActive && notExpired;
+                })
+                .toList();
           })
-          .toList();
-    }).handleError((Object error, StackTrace stackTrace) {
-      _log('activeCouponsStream failed.', error: error, stackTrace: stackTrace);
-    }));
+          .handleError((Object error, StackTrace stackTrace) {
+            _log(
+              'activeCouponsStream failed.',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }),
+    );
   }
 
   Stream<NotificationSettingsModel> notificationSettingsStream() {
-    return _broadcast((() async* {
-      final identity = await _resolveIdentity();
-      const fallback = NotificationSettingsModel(
-        orderUpdates: true,
-        promotions: false,
-        systemAlerts: true,
-        updatedAt: null,
-      );
-      yield fallback;
-
-      try {
-        await for (final snapshot in _notificationSettingsCollection.doc(identity.uid).snapshots()) {
-          yield NotificationSettingsModel.fromFirestore(snapshot.data());
-        }
-      } catch (error, stackTrace) {
-        _log('notificationSettingsStream failed.', error: error, stackTrace: stackTrace);
+    return _broadcast(
+      (() async* {
+        final identity = await _resolveIdentity();
+        const fallback = NotificationSettingsModel(
+          orderUpdates: true,
+          promotions: false,
+          systemAlerts: true,
+          updatedAt: null,
+        );
         yield fallback;
-      }
-    })());
+
+        try {
+          await for (final snapshot
+              in _notificationSettingsCollection
+                  .doc(identity.uid)
+                  .snapshots()) {
+            yield NotificationSettingsModel.fromFirestore(snapshot.data());
+          }
+        } catch (error, stackTrace) {
+          _log(
+            'notificationSettingsStream failed.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          yield fallback;
+        }
+      })(),
+    );
   }
 
   Future<NotificationSettingsModel> getOrCreateNotificationSettings({
@@ -654,25 +728,42 @@ class ProfileFirestoreService {
   }
 
   Stream<SupportInfoModel?> supportInfoStream() {
-    return _broadcast(_firestore.collection('app_support').doc('customer_support').snapshots().map((doc) {
-      if (!doc.exists) {
-        return null;
-      }
-      return SupportInfoModel.fromFirestore(doc.data());
-    }).handleError((Object error, StackTrace stackTrace) {
-      _log('supportInfoStream failed.', error: error, stackTrace: stackTrace);
-    }));
+    return _broadcast(
+      _firestore
+          .collection('app_support')
+          .doc('customer_support')
+          .snapshots()
+          .map((doc) {
+            if (!doc.exists) {
+              return null;
+            }
+            return SupportInfoModel.fromFirestore(doc.data());
+          })
+          .handleError((Object error, StackTrace stackTrace) {
+            _log(
+              'supportInfoStream failed.',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }),
+    );
   }
 
   Stream<Map<String, dynamic>?> appContentStream(String docId) {
-    return _broadcast(_firestore
-        .collection('app_content')
-        .doc(docId)
-        .snapshots()
-        .map((doc) => doc.data())
-        .handleError((Object error, StackTrace stackTrace) {
-          _log('appContentStream($docId) failed.', error: error, stackTrace: stackTrace);
-        }));
+    return _broadcast(
+      _firestore
+          .collection('app_content')
+          .doc(docId)
+          .snapshots()
+          .map((doc) => doc.data())
+          .handleError((Object error, StackTrace stackTrace) {
+            _log(
+              'appContentStream($docId) failed.',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }),
+    );
   }
 }
 

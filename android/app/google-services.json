@@ -7,6 +7,28 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:384305289905:android:94d65caa90d7bbd7ad6090",
+        "android_client_info": {
+          "package_name": "com.example.delivery_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsO2EEtLzF8CTwYQvf3GoaoXiOvgvF-ac"
+        },
+        {
+          "current_key": "AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:384305289905:android:aed26de6ccdae55fad6090",
         "android_client_info": {
           "package_name": "com.example.quickdrop"
@@ -14,6 +36,53 @@
       },
       "oauth_client": [],
       "api_key": [
+        {
+          "current_key": "AIzaSyAsO2EEtLzF8CTwYQvf3GoaoXiOvgvF-ac"
+        },
+        {
+          "current_key": "AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:384305289905:android:46e0eaa48b422386ad6090",
+        "android_client_info": {
+          "package_name": "com.example.quickdrop_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsO2EEtLzF8CTwYQvf3GoaoXiOvgvF-ac"
+        },
+        {
+          "current_key": "AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:384305289905:android:67d42d6c8da9fce1ad6090",
+        "android_client_info": {
+          "package_name": "com.quickdropgo.agartala"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsO2EEtLzF8CTwYQvf3GoaoXiOvgvF-ac"
+        },
         {
           "current_key": "AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs"
         }

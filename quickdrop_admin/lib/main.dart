@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:audioplayers/audioplayers.dart';
+import 'package:csv/csv.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,7 +17,10 @@ import 'banner_management_page.dart';
 import 'push_notification_service.dart';
 import 'firebase_options.dart';
 import 'category_routing.dart';
+import 'services/rider_assignment_service.dart';
 import 'settings_page.dart';
+import 'shop_management_page.dart';
+import 'stock_management_page.dart';
 
 final GlobalKey<NavigatorState> adminNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,8 +36,12 @@ enum OrderStatus {
   pending,
   accepted,
   packed,
+  goingToStore,
+  reachedStore,
+  orderCollected,
   outForDelivery,
   delivered,
+  rejected,
   cancelled,
 }
 
@@ -44,10 +54,18 @@ extension OrderStatusX on OrderStatus {
         return 'Accepted';
       case OrderStatus.packed:
         return 'Packed';
+      case OrderStatus.goingToStore:
+        return 'Going to Store';
+      case OrderStatus.reachedStore:
+        return 'Reached Store';
+      case OrderStatus.orderCollected:
+        return 'Order Collected';
       case OrderStatus.outForDelivery:
         return 'Out for Delivery';
       case OrderStatus.delivered:
         return 'Delivered';
+      case OrderStatus.rejected:
+        return 'Rejected';
       case OrderStatus.cancelled:
         return 'Cancelled';
     }
@@ -65,12 +83,23 @@ OrderStatus _orderStatusFromValue(dynamic value) {
       return OrderStatus.accepted;
     case 'packed':
       return OrderStatus.packed;
+    case 'going to store':
+    case 'going_to_store':
+      return OrderStatus.goingToStore;
+    case 'reached store':
+    case 'reached_store':
+      return OrderStatus.reachedStore;
+    case 'order collected':
+    case 'order_collected':
+      return OrderStatus.orderCollected;
     case 'out for delivery':
     case 'outfordelivery':
     case 'out_for_delivery':
       return OrderStatus.outForDelivery;
     case 'delivered':
       return OrderStatus.delivered;
+    case 'rejected':
+      return OrderStatus.rejected;
     case 'cancelled':
     case 'canceled':
       return OrderStatus.cancelled;
@@ -87,10 +116,16 @@ Color _orderStatusColor(OrderStatus status) {
       return Colors.blue;
     case OrderStatus.packed:
       return Colors.deepPurple;
+    case OrderStatus.goingToStore:
+    case OrderStatus.reachedStore:
+    case OrderStatus.orderCollected:
+      return Colors.indigo;
     case OrderStatus.outForDelivery:
       return Colors.teal;
     case OrderStatus.delivered:
       return Colors.green;
+    case OrderStatus.rejected:
+      return Colors.red;
     case OrderStatus.cancelled:
       return Colors.red;
   }
@@ -104,10 +139,18 @@ IconData _orderStatusIcon(OrderStatus status) {
       return Icons.verified_outlined;
     case OrderStatus.packed:
       return Icons.inventory_2_outlined;
+    case OrderStatus.goingToStore:
+      return Icons.storefront_outlined;
+    case OrderStatus.reachedStore:
+      return Icons.location_on_outlined;
+    case OrderStatus.orderCollected:
+      return Icons.shopping_bag_outlined;
     case OrderStatus.outForDelivery:
       return Icons.local_shipping_outlined;
     case OrderStatus.delivered:
       return Icons.done_all_outlined;
+    case OrderStatus.rejected:
+      return Icons.cancel_outlined;
     case OrderStatus.cancelled:
       return Icons.cancel_outlined;
   }
@@ -118,20 +161,9 @@ bool _canCancelOrder(OrderStatus status) {
 }
 
 bool _canTransitionOrderStatus(OrderStatus current, OrderStatus next) {
-  switch (current) {
-    case OrderStatus.pending:
-      return next == OrderStatus.accepted || next == OrderStatus.cancelled;
-    case OrderStatus.accepted:
-      return next == OrderStatus.packed || next == OrderStatus.cancelled;
-    case OrderStatus.packed:
-      return next == OrderStatus.outForDelivery ||
-          next == OrderStatus.cancelled;
-    case OrderStatus.outForDelivery:
-      return next == OrderStatus.delivered || next == OrderStatus.cancelled;
-    case OrderStatus.delivered:
-    case OrderStatus.cancelled:
-      return false;
-  }
+  // Dispatch can safely cancel an active order, but the delivery partner is
+  // the source of truth for every forward delivery milestone.
+  return next == OrderStatus.cancelled && _canCancelOrder(current);
 }
 
 Future<void> main() async {
@@ -793,6 +825,30 @@ class _DashboardPageState extends State<DashboardPage> {
                 },
               ),
               _DashboardCard(
+                icon: Icons.inventory_outlined,
+                title: '\u{1F4E6} Stock Management',
+                subtitle: 'Track and update product stock',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const StockManagementPage(),
+                    ),
+                  );
+                },
+              ),
+              _DashboardCard(
+                icon: Icons.store_mall_directory_outlined,
+                title: 'Shop Management',
+                subtitle: 'Manage shops and shop inventory',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const ShopManagementPage(),
+                    ),
+                  );
+                },
+              ),
+              _DashboardCard(
                 icon: Icons.view_carousel_outlined,
                 title: 'Banner Management',
                 subtitle: 'Manage banners',
@@ -911,12 +967,78 @@ class _OrdersPageState extends State<OrdersPage> {
     OrderStatus.pending,
     OrderStatus.accepted,
     OrderStatus.packed,
+    OrderStatus.goingToStore,
+    OrderStatus.reachedStore,
+    OrderStatus.orderCollected,
     OrderStatus.outForDelivery,
     OrderStatus.delivered,
+    OrderStatus.rejected,
     OrderStatus.cancelled,
   ];
 
   OrderStatus? _selectedStatus = OrderStatus.pending;
+  final RiderAssignmentService _riderAssignmentService =
+      RiderAssignmentService();
+
+  /// Reserves the nearest eligible rider. The order deliberately remains
+  /// pending until that rider accepts it in the Delivery App.
+  Future<void> _assignNearestRider(
+    BuildContext context,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    OrderStatus currentStatus,
+  ) async {
+    if (currentStatus != OrderStatus.pending) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only pending orders can be assigned.')),
+      );
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      final rider = await _riderAssignmentService.assignNearestRider(
+        orderRef: doc.reference,
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Order assigned to ${rider.name} '
+            '(${rider.distanceKm.toStringAsFixed(1)} km away). '
+            'Waiting for rider acceptance.',
+          ),
+        ),
+      );
+    } on NoRiderAvailableException {
+      final reason = await _lockedRidersSummary();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'No available rider nearby. The order remains pending.$reason',
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } on RiderAssignmentException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } on FirebaseException catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(error.message ?? 'Failed to accept order.')),
+      );
+    }
+  }
+
+  Future<String> _lockedRidersSummary() async {
+    try {
+      final locked = await _riderAssignmentService.diagnoseLockedRiders();
+      if (locked.isEmpty) {
+        return '';
+      }
+      return '\n${locked.map((d) => d.description).join('\n')}';
+    } catch (_) {
+      return '';
+    }
+  }
 
   Future<void> _updateOrderStatus(
     BuildContext context,
@@ -973,19 +1095,6 @@ class _OrdersPageState extends State<OrdersPage> {
       doc,
       currentStatus,
       OrderStatus.cancelled,
-    );
-  }
-
-  Future<void> _markOrderDelivered(
-    BuildContext context,
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-    OrderStatus currentStatus,
-  ) async {
-    await _updateOrderStatus(
-      context,
-      doc,
-      currentStatus,
-      OrderStatus.delivered,
     );
   }
 
@@ -1153,6 +1262,11 @@ class _OrdersPageState extends State<OrdersPage> {
                           final totalAmount = _displayAmount(
                             data['totalAmount'],
                           );
+                          final hasReservedRider =
+                              (data['assignedPartnerId'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty;
 
                           return Card(
                             elevation: 0,
@@ -1257,75 +1371,35 @@ class _OrdersPageState extends State<OrdersPage> {
                                       ),
                                     ),
                                   ],
-                                  if (orderStatus == OrderStatus.pending) ...[
+                                  if (orderStatus == OrderStatus.pending &&
+                                      !hasReservedRider) ...[
                                     const SizedBox(height: 6),
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: TextButton.icon(
-                                        onPressed: () => _updateOrderStatus(
+                                        onPressed: () => _assignNearestRider(
                                           context,
                                           doc,
                                           orderStatus,
-                                          OrderStatus.accepted,
                                         ),
                                         icon: const Icon(
                                           Icons.check_circle_outline,
                                         ),
-                                        label: const Text('Accept'),
+                                        label: const Text('Assign nearest rider'),
                                       ),
                                     ),
                                   ],
-                                  if (orderStatus == OrderStatus.accepted) ...[
+                                  if (orderStatus == OrderStatus.pending &&
+                                      hasReservedRider) ...[
                                     const SizedBox(height: 6),
-                                    Align(
+                                    const Align(
                                       alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: () => _updateOrderStatus(
-                                          context,
-                                          doc,
-                                          orderStatus,
-                                          OrderStatus.packed,
+                                      child: Text(
+                                        'Waiting for rider acceptance',
+                                        style: TextStyle(
+                                          color: Colors.blueGrey,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        icon: const Icon(
-                                          Icons.inventory_2_outlined,
-                                        ),
-                                        label: const Text('Packed'),
-                                      ),
-                                    ),
-                                  ],
-                                  if (orderStatus == OrderStatus.packed) ...[
-                                    const SizedBox(height: 6),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: () => _updateOrderStatus(
-                                          context,
-                                          doc,
-                                          orderStatus,
-                                          OrderStatus.outForDelivery,
-                                        ),
-                                        icon: const Icon(
-                                          Icons.local_shipping_outlined,
-                                        ),
-                                        label: const Text('Out for Delivery'),
-                                      ),
-                                    ),
-                                  ],
-                                  if (orderStatus ==
-                                      OrderStatus.outForDelivery) ...[
-                                    const SizedBox(height: 6),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: TextButton.icon(
-                                        onPressed: () => _markOrderDelivered(
-                                          context,
-                                          doc,
-                                          orderStatus,
-                                        ),
-                                        icon: const Icon(
-                                          Icons.done_all_outlined,
-                                        ),
-                                        label: const Text('Delivered'),
                                       ),
                                     ),
                                   ],
@@ -1410,6 +1484,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   final CollectionReference<Map<String, dynamic>> _productsRef =
       FirebaseFirestore.instance.collection('products');
   static final List<String> _mainCategories = categorySubcategoryMap.keys
+      .toSet()
       .toList();
   static const List<String> _productCategoryFilters = [
     'Grocery',
@@ -1421,7 +1496,41 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     'Cosmetics',
     'Electronics',
   ];
+  static const List<String> _unitOptions = ['g', 'kg', 'ml', 'L', 'pcs'];
+  static const List<String> _csvColumns = [
+    'name',
+    'price',
+    'category',
+    'subcategory',
+    'childCategory',
+    'imageUrl',
+    'stock',
+    'brand',
+    'weight',
+    'unit',
+    'oldPrice',
+    'discount',
+    'shortDescription',
+  ];
+  // Firestore allows 500 writes per batch; stay below it for safety.
+  static const int _importBatchSize = 400;
+  static const List<String> _imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+  static const int _maxProductImages = 4;
   String? _selectedProductCategory;
+  String _searchQuery = '';
+
+  // Dropdowns crash on duplicate or missing values, so keep options unique and
+  // always include the value currently stored on the product.
+  List<String> _dropdownOptions(List<String> options, String? currentValue) {
+    final values = <String>{
+      ...options.map((option) => option.trim()).where((o) => o.isNotEmpty),
+    };
+    final current = currentValue?.trim() ?? '';
+    if (current.isNotEmpty) {
+      values.add(current);
+    }
+    return values.toList();
+  }
 
   String _contentTypeForExtension(String? extension) {
     switch ((extension ?? '').toLowerCase()) {
@@ -1438,17 +1547,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     }
   }
 
-  Future<String?> _pickAndUploadProductImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) {
-      return null;
-    }
-
-    final file = result.files.first;
+  Future<String> _uploadProductImageBytes(PlatformFile file) async {
     final bytes = file.bytes;
     if (bytes == null || bytes.isEmpty) {
       throw Exception('Selected file has no data.');
@@ -1467,6 +1566,86 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     return ref.getDownloadURL();
   }
 
+  // Older products only have `imageUrl`; treat it as the first gallery image.
+  List<String> _existingImageUrls(Map<String, dynamic> data) {
+    final urls = <String>[];
+    final mainUrl = data['imageUrl']?.toString().trim() ?? '';
+    if (mainUrl.isNotEmpty) {
+      urls.add(mainUrl);
+    }
+    final rawUrls = data['imageUrls'];
+    if (rawUrls is List) {
+      for (final value in rawUrls) {
+        final url = value?.toString().trim() ?? '';
+        if (url.isNotEmpty && !urls.contains(url)) {
+          urls.add(url);
+        }
+      }
+    }
+    return urls.take(_maxProductImages).toList();
+  }
+
+  Widget _photoThumbnail({
+    required String url,
+    required bool isMain,
+    required VoidCallback? onSetMain,
+    required VoidCallback? onRemove,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: 96,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isMain ? colorScheme.primary : colorScheme.outlineVariant,
+          width: isMain ? 2 : 1,
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              width: 84,
+              height: 64,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const SizedBox(
+                width: 84,
+                height: 64,
+                child: Icon(Icons.broken_image_outlined),
+              ),
+            ),
+          ),
+          Text(
+            isMain ? 'Main Photo' : 'Photo',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Set as main photo',
+                visualDensity: VisualDensity.compact,
+                onPressed: onSetMain,
+                icon: Icon(isMain ? Icons.star : Icons.star_border),
+              ),
+              IconButton(
+                tooltip: 'Remove photo',
+                visualDensity: VisualDensity.compact,
+                onPressed: onRemove,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showProductDialog({
     String? documentId,
     Map<String, dynamic>? initialData,
@@ -1483,7 +1662,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     );
     String? selectedCategory = _mainCategories.contains(initialCategoryValue)
         ? initialCategoryValue
-        : null;
+        : (initialCategoryValue.trim().isEmpty ? null : initialCategoryValue);
     String? selectedSubcategory = initialData?['subcategory']
         ?.toString()
         .trim();
@@ -1499,6 +1678,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     final imageUrlController = TextEditingController(
       text: initialData?['imageUrl']?.toString() ?? '',
     );
+    final productImageUrls = _existingImageUrls(initialData ?? const {});
     final stockController = TextEditingController(
       text: initialData?['stock']?.toString() ?? '',
     );
@@ -1517,14 +1697,14 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     final shortDescriptionController = TextEditingController(
       text: initialData?['shortDescription']?.toString() ?? '',
     );
-    const unitOptions = ['g', 'kg', 'ml', 'L', 'pcs'];
+    const unitOptions = _unitOptions;
     String selectedUnit = unitOptions.contains(initialData?['unit']?.toString())
         ? initialData!['unit'].toString()
         : 'g';
     bool isImageUploading = false;
-    String selectedImageLabel = imageUrlController.text.trim().isEmpty
-        ? 'No image selected'
-        : 'Image URL ready';
+    String selectedImageLabel = productImageUrls.isEmpty
+        ? 'No photos added yet'
+        : '${productImageUrls.length} of $_maxProductImages photo(s) added';
 
     await showDialog<void>(
       context: context,
@@ -1570,14 +1750,15 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                         decoration: const InputDecoration(
                           labelText: 'Category',
                         ),
-                        items: _mainCategories
-                            .map(
-                              (category) => DropdownMenuItem<String>(
-                                value: category,
-                                child: Text(category),
-                              ),
-                            )
-                            .toList(),
+                        items:
+                            _dropdownOptions(_mainCategories, selectedCategory)
+                                .map(
+                                  (category) => DropdownMenuItem<String>(
+                                    value: category,
+                                    child: Text(category),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (value) {
                           setDialogState(() {
                             selectedCategory = value;
@@ -1594,18 +1775,27 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
+                        // Rebuild the field when the parent changes so the stale
+                        // selection is dropped along with its options.
+                        key: ValueKey('subcategory-$selectedCategory'),
                         initialValue: selectedSubcategory,
                         decoration: const InputDecoration(
                           labelText: 'Subcategory',
                         ),
-                        items: buildSubcategoryOptions(selectedCategory ?? '')
-                            .map(
-                              (subcategory) => DropdownMenuItem<String>(
-                                value: subcategory,
-                                child: Text(subcategory),
-                              ),
-                            )
-                            .toList(),
+                        items:
+                            _dropdownOptions(
+                                  buildSubcategoryOptions(
+                                    selectedCategory ?? '',
+                                  ),
+                                  selectedSubcategory,
+                                )
+                                .map(
+                                  (subcategory) => DropdownMenuItem<String>(
+                                    value: subcategory,
+                                    child: Text(subcategory),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (value) {
                           setDialogState(() {
                             selectedSubcategory = value;
@@ -1621,31 +1811,89 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                       ),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
+                        key: ValueKey('childCategory-$selectedSubcategory'),
                         initialValue: selectedChildCategory,
                         decoration: const InputDecoration(
                           labelText: 'Child Category',
                         ),
-                        items: buildChildCategoryOptions(selectedSubcategory)
-                            .map(
-                              (childCategory) => DropdownMenuItem<String>(
-                                value: childCategory,
-                                child: Text(childCategory),
-                              ),
-                            )
-                            .toList(),
+                        items:
+                            _dropdownOptions(
+                                  buildChildCategoryOptions(
+                                    selectedSubcategory,
+                                  ),
+                                  selectedChildCategory,
+                                )
+                                .map(
+                                  (childCategory) => DropdownMenuItem<String>(
+                                    value: childCategory,
+                                    child: Text(childCategory),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (value) {
                           setDialogState(() {
                             selectedChildCategory = value;
                           });
                         },
                         validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
+                          final hasChildCategories = buildChildCategoryOptions(
+                            selectedSubcategory,
+                          ).isNotEmpty;
+                          if (hasChildCategories &&
+                              (value == null || value.trim().isEmpty)) {
                             return 'Please select child category';
                           }
                           return null;
                         },
                       ),
                       const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Product Photos',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (productImageUrls.isNotEmpty)
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (var i = 0; i < productImageUrls.length; i++)
+                              _photoThumbnail(
+                                url: productImageUrls[i],
+                                isMain: i == 0,
+                                onSetMain: i == 0 || isImageUploading
+                                    ? null
+                                    : () {
+                                        setDialogState(() {
+                                          final url = productImageUrls.removeAt(
+                                            i,
+                                          );
+                                          productImageUrls.insert(0, url);
+                                          imageUrlController.text = url;
+                                        });
+                                      },
+                                onRemove: isImageUploading
+                                    ? null
+                                    : () {
+                                        setDialogState(() {
+                                          productImageUrls.removeAt(i);
+                                          imageUrlController.text =
+                                              productImageUrls.isEmpty
+                                              ? ''
+                                              : productImageUrls.first;
+                                          selectedImageLabel =
+                                              productImageUrls.isEmpty
+                                              ? 'No photos added yet'
+                                              : '${productImageUrls.length} of $_maxProductImages photo(s) added';
+                                        });
+                                      },
+                              ),
+                          ],
+                        ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Expanded(
@@ -1658,79 +1906,76 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                           ),
                           const SizedBox(width: 10),
                           OutlinedButton.icon(
-                            onPressed: isImageUploading
+                            onPressed:
+                                isImageUploading ||
+                                    productImageUrls.length >= _maxProductImages
                                 ? null
                                 : () async {
+                                    final messenger = ScaffoldMessenger.of(
+                                      context,
+                                    );
+                                    setDialogState(() {
+                                      isImageUploading = true;
+                                      selectedImageLabel =
+                                          'Uploading photos...';
+                                    });
+
+                                    var uploaded = 0;
+                                    var failed = 0;
                                     try {
-                                      if (!context.mounted ||
-                                          !dialogContext.mounted) {
-                                        return;
-                                      }
-                                      setDialogState(() {
-                                        isImageUploading = true;
-                                        selectedImageLabel =
-                                            'Uploading image...';
-                                      });
-
-                                      final url =
-                                          await _pickAndUploadProductImage();
-
-                                      if (!context.mounted ||
-                                          !dialogContext.mounted) {
-                                        return;
-                                      }
-
-                                      if (url != null) {
-                                        imageUrlController.text = url;
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Image uploaded successfully',
-                                            ),
-                                          ),
-                                        );
-                                        if (context.mounted) {
-                                          setDialogState(() {
-                                            selectedImageLabel =
-                                                'Image URL ready';
-                                          });
+                                      final picked = await FilePicker.platform.
+                                          pickFiles(
+                                            allowMultiple: true,
+                                            type: FileType.custom,
+                                            allowedExtensions: _imageExtensions,
+                                            withData: true,
+                                          );
+                                      for (final file
+                                          in picked?.files ??
+                                              const <PlatformFile>[]) {
+                                        if (productImageUrls.length >=
+                                            _maxProductImages) {
+                                          break;
                                         }
-                                      } else {
-                                        if (context.mounted) {
-                                          setDialogState(() {
-                                            selectedImageLabel =
-                                                'No image selected';
-                                          });
+                                        try {
+                                          final url =
+                                              await _uploadProductImageBytes(
+                                                file,
+                                              );
+                                          if (!productImageUrls.contains(url)) {
+                                            productImageUrls.add(url);
+                                            uploaded++;
+                                          }
+                                        } catch (_) {
+                                          failed++;
                                         }
-                                      }
-                                    } catch (error) {
-                                      if (context.mounted &&
-                                          dialogContext.mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              'Image upload failed: $error',
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                      if (context.mounted) {
-                                        setDialogState(() {
-                                          selectedImageLabel =
-                                              'No image selected';
-                                        });
                                       }
                                     } finally {
-                                      if (context.mounted &&
-                                          dialogContext.mounted) {
+                                      if (dialogContext.mounted) {
                                         setDialogState(() {
                                           isImageUploading = false;
+                                          imageUrlController.text =
+                                              productImageUrls.isEmpty
+                                              ? ''
+                                              : productImageUrls.first;
+                                          selectedImageLabel =
+                                              productImageUrls.isEmpty
+                                              ? 'No photos added yet'
+                                              : '${productImageUrls.length} of $_maxProductImages photo(s) added';
                                         });
                                       }
+                                    }
+
+                                    if (dialogContext.mounted &&
+                                        (uploaded > 0 || failed > 0)) {
+                                      messenger.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '$uploaded photo(s) uploaded'
+                                            '${failed > 0 ? ', $failed failed' : ''}',
+                                          ),
+                                        ),
+                                      );
                                     }
                                   },
                             icon: isImageUploading
@@ -1741,8 +1986,10 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Icon(Icons.upload_file),
-                            label: const Text('Upload Image'),
+                                : const Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                  ),
+                            label: const Text('Add Photos'),
                           ),
                         ],
                       ),
@@ -1868,13 +2115,23 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 
                     final messenger = ScaffoldMessenger.of(context);
 
+                    final manualUrl = imageUrlController.text.trim();
+                    if (manualUrl.isNotEmpty &&
+                        !productImageUrls.contains(manualUrl)) {
+                      productImageUrls.insert(0, manualUrl);
+                    }
+                    final galleryUrls = productImageUrls
+                        .take(_maxProductImages)
+                        .toList();
+
                     final data = {
                       'name': nameController.text.trim(),
                       'price': double.parse(priceController.text.trim()),
                       'category': canonicalCategory(selectedCategory ?? ''),
                       'subcategory': selectedSubcategory?.trim() ?? '',
                       'childCategory': selectedChildCategory?.trim() ?? '',
-                      'imageUrl': imageUrlController.text.trim(),
+                      'imageUrl': galleryUrls.isEmpty ? '' : galleryUrls.first,
+                      'imageUrls': galleryUrls,
                       'stock': int.parse(stockController.text.trim()),
                       'brand': brandController.text.trim(),
                       'weight': weightController.text.trim(),
@@ -1943,6 +2200,450 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     shortDescriptionController.dispose();
   }
 
+  String _csvCell(List<dynamic> row, Map<String, int> columns, String key) {
+    final index = columns[key];
+    if (index == null || index >= row.length) {
+      return '';
+    }
+    return row[index]?.toString().trim() ?? '';
+  }
+
+  String _duplicateKey(String name, String category, String unit) {
+    return '${name.toLowerCase()}|${category.toLowerCase()}|${unit.toLowerCase()}';
+  }
+
+  Future<void> _importProductsFromCsv() async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['csv'],
+      withData: true,
+    );
+
+    if (picked == null || picked.files.isEmpty) {
+      return;
+    }
+
+    final bytes = picked.files.first.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Selected CSV file is empty.')),
+      );
+      return;
+    }
+
+    List<List<dynamic>> rows;
+    try {
+      final content = utf8
+          .decode(bytes, allowMalformed: true)
+          .replaceAll('\r\n', '\n')
+          .replaceAll('\r', '\n');
+      rows = const CsvToListConverter(
+        eol: '\n',
+        shouldParseNumbers: false,
+      ).convert(content);
+    } catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Unable to read CSV file: $error')),
+      );
+      return;
+    }
+
+    rows = rows
+        .where(
+          (row) =>
+              row.any((cell) => (cell?.toString().trim() ?? '').isNotEmpty),
+        )
+        .toList();
+
+    if (rows.length < 2) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('CSV must have a header row and data.')),
+      );
+      return;
+    }
+
+    final headerRow = rows.first
+        .map((cell) => cell?.toString().trim() ?? '')
+        .toList();
+    final columns = <String, int>{};
+    for (final column in _csvColumns) {
+      final index = headerRow.indexWhere(
+        (header) => header.toLowerCase() == column.toLowerCase(),
+      );
+      if (index != -1) {
+        columns[column] = index;
+      }
+    }
+
+    final missingRequired = [
+      'name',
+      'price',
+      'category',
+      'subcategory',
+      'stock',
+    ].where((column) => !columns.containsKey(column)).toList();
+    if (missingRequired.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'CSV is missing required columns: ${missingRequired.join(', ')}',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final existingSnapshot = await _productsRef.get();
+    final existingKeys = existingSnapshot.docs.map((doc) {
+      final data = doc.data();
+      return _duplicateKey(
+        data['name']?.toString().trim() ?? '',
+        data['category']?.toString().trim() ?? '',
+        data['unit']?.toString().trim() ?? '',
+      );
+    }).toSet();
+
+    final validProducts = <Map<String, dynamic>>[];
+    var skippedCount = 0;
+    var duplicateCount = 0;
+
+    for (final row in rows.skip(1)) {
+      final name = _csvCell(row, columns, 'name');
+      final category = canonicalCategory(_csvCell(row, columns, 'category'));
+      final subcategory = _csvCell(row, columns, 'subcategory');
+      final price = double.tryParse(_csvCell(row, columns, 'price'));
+      final stock = int.tryParse(_csvCell(row, columns, 'stock'));
+      final rawUnit = _csvCell(row, columns, 'unit');
+      final unit = _unitOptions.firstWhere(
+        (option) => option.toLowerCase() == rawUnit.toLowerCase(),
+        orElse: () => '',
+      );
+
+      if (name.isEmpty ||
+          category.isEmpty ||
+          subcategory.isEmpty ||
+          price == null ||
+          price <= 0 ||
+          stock == null ||
+          stock < 0 ||
+          (rawUnit.isNotEmpty && unit.isEmpty)) {
+        skippedCount++;
+        continue;
+      }
+
+      final resolvedUnit = unit.isEmpty ? _unitOptions.first : unit;
+      final key = _duplicateKey(name, category, resolvedUnit);
+      if (existingKeys.contains(key)) {
+        duplicateCount++;
+        continue;
+      }
+      existingKeys.add(key);
+
+      validProducts.add({
+        'name': name,
+        'price': price,
+        'category': category,
+        'subcategory': subcategory,
+        'childCategory': _csvCell(row, columns, 'childCategory'),
+        'imageUrl': _csvCell(row, columns, 'imageUrl'),
+        'stock': stock,
+        'brand': _csvCell(row, columns, 'brand'),
+        'weight': _csvCell(row, columns, 'weight'),
+        'unit': resolvedUnit,
+        'oldPrice': double.tryParse(_csvCell(row, columns, 'oldPrice')) ?? 0.0,
+        'discount': double.tryParse(_csvCell(row, columns, 'discount')) ?? 0.0,
+        'shortDescription': _csvCell(row, columns, 'shortDescription'),
+      });
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (validProducts.isEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'No products to import. '
+            '$skippedCount invalid row(s), $duplicateCount duplicate(s) skipped.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Import Products'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${validProducts.length} product(s) will be imported.'),
+              if (skippedCount > 0) ...[
+                const SizedBox(height: 6),
+                Text('$skippedCount invalid row(s) will be skipped.'),
+              ],
+              if (duplicateCount > 0) ...[
+                const SizedBox(height: 6),
+                Text('$duplicateCount duplicate row(s) will be skipped.'),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Import'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    final progress = ValueNotifier<int>(0);
+    final navigator = Navigator.of(context);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: progress,
+                    builder: (context, value, _) {
+                      return Text(
+                        'Importing products... $value / ${validProducts.length}',
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    var importedCount = 0;
+    String? importError;
+
+    try {
+      for (
+        var start = 0;
+        start < validProducts.length;
+        start += _importBatchSize
+      ) {
+        final end = (start + _importBatchSize) > validProducts.length
+            ? validProducts.length
+            : start + _importBatchSize;
+        final batch = FirebaseFirestore.instance.batch();
+        for (final product in validProducts.sublist(start, end)) {
+          batch.set(_productsRef.doc(), product);
+        }
+        await batch.commit();
+        importedCount = end;
+        progress.value = importedCount;
+      }
+    } on FirebaseException catch (error) {
+      importError = error.message ?? 'Failed to import products.';
+    } finally {
+      navigator.pop();
+      progress.dispose();
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (importError != null) {
+      messenger.showSnackBar(SnackBar(content: Text(importError)));
+      return;
+    }
+
+    final details = <String>[
+      if (skippedCount > 0) '$skippedCount invalid row(s) skipped',
+      if (duplicateCount > 0) '$duplicateCount duplicate(s) skipped',
+    ];
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '$importedCount products imported successfully'
+          '${details.isEmpty ? '' : ' • ${details.join(', ')}'}',
+        ),
+      ),
+    );
+    setState(() {});
+  }
+
+  String _normalizedProductKey(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+  }
+
+  Future<void> _bulkUploadProductImages() async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    final picked = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: _imageExtensions,
+      withData: true,
+    );
+
+    if (picked == null || picked.files.isEmpty || !mounted) {
+      return;
+    }
+
+    final files = picked.files;
+    final snapshot = await _productsRef.get();
+    final productsByKey =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final doc in snapshot.docs) {
+      final key = _normalizedProductKey(
+        doc.data()['name']?.toString().trim() ?? '',
+      );
+      if (key.isNotEmpty) {
+        productsByKey.putIfAbsent(key, () => doc);
+      }
+    }
+
+    // Files like `instant_coffee_2.jpg` become extra photos for the product.
+    final groupedFiles = <String, List<PlatformFile>>{};
+    final matchedDocs = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    var unmatchedCount = 0;
+
+    for (final file in files) {
+      final baseName = file.name.contains('.')
+          ? file.name.substring(0, file.name.lastIndexOf('.'))
+          : file.name;
+      final key = _normalizedProductKey(baseName);
+      final doc =
+          productsByKey[key] ??
+          productsByKey[key.replaceAll(RegExp(r'_\d+$'), '')];
+
+      if (doc == null) {
+        unmatchedCount++;
+        continue;
+      }
+
+      matchedDocs[doc.id] = doc;
+      groupedFiles.putIfAbsent(doc.id, () => <PlatformFile>[]).add(file);
+    }
+
+    final matchedFileCount = groupedFiles.values.fold<int>(
+      0,
+      (total, list) => total + list.length,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final progress = ValueNotifier<int>(0);
+    final navigator = Navigator.of(context);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            content: Row(
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: progress,
+                    builder: (context, value, _) {
+                      return Text(
+                        'Uploading images... $value / $matchedFileCount',
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    var uploadedCount = 0;
+    var failedCount = 0;
+    var skippedCount = 0;
+
+    for (final entry in groupedFiles.entries) {
+      final doc = matchedDocs[entry.key]!;
+      final existingUrls = _existingImageUrls(doc.data());
+      final urls = [...existingUrls];
+
+      for (final file in entry.value) {
+        if (urls.length >= _maxProductImages) {
+          skippedCount++;
+        } else {
+          try {
+            final url = await _uploadProductImageBytes(file);
+            if (!urls.contains(url)) {
+              urls.add(url);
+            }
+            uploadedCount++;
+          } catch (_) {
+            failedCount++;
+          }
+        }
+        progress.value = progress.value + 1;
+      }
+
+      if (!listEquals(urls, existingUrls) && urls.isNotEmpty) {
+        await doc.reference.update({'imageUrl': urls.first, 'imageUrls': urls});
+      }
+    }
+
+    navigator.pop();
+    progress.dispose();
+
+    if (!mounted) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '$uploadedCount image(s) uploaded \u2022 '
+          '$unmatchedCount unmatched \u2022 $skippedCount over limit \u2022 '
+          '$failedCount failed',
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteProduct(String id) async {
     try {
       await _productsRef.doc(id).delete();
@@ -1967,11 +2668,34 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Product Management')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showProductDialog(),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Product'),
+      appBar: AppBar(
+        title: const Text('Product Management'),
+        actions: [
+          TextButton.icon(
+            onPressed: _bulkUploadProductImages,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Bulk Image Upload'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'importCsvProducts',
+            onPressed: _importProductsFromCsv,
+            icon: const Icon(Icons.upload_file_outlined),
+            label: const Text('Import CSV'),
+          ),
+          const SizedBox(width: 12),
+          FloatingActionButton.extended(
+            heroTag: 'addProduct',
+            onPressed: () => _showProductDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Product'),
+          ),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: _productsRef.snapshots(),
@@ -2008,15 +2732,42 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             }).length;
           }
 
-          final filteredProducts = _selectedProductCategory == null
-              ? products
-              : products.where((doc) {
-                  return doc.data()['category']?.toString().trim() ==
-                      _selectedProductCategory;
-                }).toList();
+          final filteredProducts = products.where((doc) {
+            final data = doc.data();
+            final matchesCategory =
+                _selectedProductCategory == null ||
+                data['category']?.toString().trim() == _selectedProductCategory;
+            if (!matchesCategory) {
+              return false;
+            }
+            if (_searchQuery.isEmpty) {
+              return true;
+            }
+            final haystack = [
+              data['name'],
+              data['brand'],
+              data['subcategory'],
+              data['childCategory'],
+            ].map((value) => value?.toString().toLowerCase() ?? '').join(' ');
+            return haystack.contains(_searchQuery);
+          }).toList();
 
           return Column(
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.trim().toLowerCase();
+                    });
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'Search products by name or brand',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: SizedBox(
@@ -2077,6 +2828,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                           final category =
                               data['category']?.toString() ?? 'General';
                           final stock = data['stock']?.toString() ?? '0';
+                          final imageUrl =
+                              data['imageUrl']?.toString().trim() ?? '';
 
                           return Card(
                             elevation: 0,
@@ -2095,6 +2848,35 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: imageUrl.isEmpty
+                                            ? Container(
+                                                width: 56,
+                                                height: 56,
+                                                color: colorScheme
+                                                    .surfaceContainerHighest,
+                                                child: const Icon(
+                                                  Icons.image_outlined,
+                                                ),
+                                              )
+                                            : Image.network(
+                                                imageUrl,
+                                                width: 56,
+                                                height: 56,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, _, _) => Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  color: colorScheme
+                                                      .surfaceContainerHighest,
+                                                  child: const Icon(
+                                                    Icons.broken_image_outlined,
+                                                  ),
+                                                ),
+                                              ),
+                                      ),
+                                      const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
                                           crossAxisAlignment:

@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'auth_service.dart';
 import 'phone_auth_service.dart';
 import 'main.dart';
+import 'app_theme.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key, required this.cartNotifier});
@@ -270,20 +271,20 @@ class _LoginPageState extends State<LoginPage> {
       labelText: label,
       prefixIcon: icon == null
           ? null
-          : Icon(icon, color: const Color(0xFFFFC107)),
+          : Icon(icon, color: Colors.black),
       filled: true,
       fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: const Color(0xFFF8F9FA)),
+        borderSide: const BorderSide(color: QuickDropColors.border),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: const Color(0xFFF8F9FA)),
+        borderSide: const BorderSide(color: QuickDropColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFFFC107), width: 1.5),
+        borderSide: const BorderSide(color: Colors.black, width: 1.5),
       ),
     );
   }
@@ -294,7 +295,7 @@ class _LoginPageState extends State<LoginPage> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF8F9FA), Colors.white],
+            colors: [QuickDropColors.mint, QuickDropColors.background],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -325,7 +326,7 @@ class _LoginPageState extends State<LoginPage> {
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFFFFC107),
+                      color: QuickDropColors.primaryDark,
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -353,7 +354,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _sendOtp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFC107),
+                        backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -385,7 +386,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: ElevatedButton(
                       onPressed: _isLoading ? null : _verifyOtp,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFC107),
+                        backgroundColor: Colors.black,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),

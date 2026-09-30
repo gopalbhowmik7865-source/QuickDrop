@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs',
-    appId: '1:384305289905:android:aed26de6ccdae55fad6090',
+    appId: '1:384305289905:android:46e0eaa48b422386ad6090',
     messagingSenderId: '384305289905',
     projectId: 'quickdrop-cbf49',
     storageBucket: 'quickdrop-cbf49.firebasestorage.app',

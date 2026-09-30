@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
@@ -21,7 +22,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  static const Color _backgroundColor = Color(0xFFFFD54F);
+  static const Color _backgroundColor = QuickDropColors.primaryLight;
   static const String _logoAsset = 'assets/logos/quickdrop_go_logo.png';
   static const List<_SplashCategoryAsset> _categoryAssets = [
     _SplashCategoryAsset(
@@ -222,7 +223,7 @@ class _SplashScreenState extends State<SplashScreen>
                       child: const Text(
                         'QuickDrop',
                         style: TextStyle(
-                          color: Color(0xFF5D4600),
+                          color: QuickDropColors.primaryDark,
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.4,

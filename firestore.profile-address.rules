@@ -82,22 +82,10 @@ service cloud.firestore {
         ]);
     }
 
-    function isValidCustomerStockReduction() {
-      return isAuthenticated()
-        && !isDeliveryPartner()
-        && resource.data.get('stock', null) is number
-        && request.resource.data.get('stock', null) is number
-        && request.resource.data.stock >= 0
-        && request.resource.data.stock < resource.data.stock
-        && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['stock']);
-    }
-
     match /products/{productId} {
       allow get, list: if (isAuthenticated() && !isDeliveryPartner())
         || isPublicProductDocument();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || isValidCustomerStockReduction();
+      allow create, update, delete: if isAdmin();
     }
 
     match /banners/{bannerId} {
@@ -106,8 +94,8 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Raw shops remain private above. The website reads this deliberately
-    // minimal projection instead.
+    // Raw shops contain phone numbers and exact coordinates, so they remain
+    // authenticated. The website reads this deliberately minimal projection.
     match /public_shops/{shopId} {
       allow get, list: if isPublicShopProjection();
       allow create, update, delete: if isAdmin();
@@ -394,8 +382,26 @@ service cloud.firestore {
 
     // Existing unrelated collection behavior is intentionally left alone in
     // this security stage. The explicit exclusions ensure it can never reopen
-    // order, order-chat, rider-profile, private-credential, or public-catalog
-    // access.
+    // order, order-chat, rider-profile, or private-credential access.
+    // Customer profiles and addresses are scoped to their authenticated owner.
+    match /users/{uid} {
+      allow read, write: if isAdmin()
+        || (isAuthenticated() && !isDeliveryPartner() && request.auth.uid == uid);
+    }
+
+    match /addresses/{addressId} {
+      allow read, delete: if isAdmin()
+        || (isAuthenticated() && !isDeliveryPartner()
+          && resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin()
+        || (isAuthenticated() && !isDeliveryPartner()
+          && request.resource.data.ownerId == request.auth.uid);
+      allow update: if isAdmin()
+        || (isAuthenticated() && !isDeliveryPartner()
+          && resource.data.ownerId == request.auth.uid
+          && request.resource.data.ownerId == request.auth.uid);
+    }
+
     match /{document=**} {
       allow read, write: if isAuthenticated()
         && !isDeliveryPartner()
@@ -404,7 +410,9 @@ service cloud.firestore {
         && request.path[3] != 'orders'
         && request.path[3] != 'products'
         && request.path[3] != 'banners'
-        && request.path[3] != 'public_shops';
+        && request.path[3] != 'public_shops'
+        && request.path[3] != 'users'
+        && request.path[3] != 'addresses';
     }
   }
 }

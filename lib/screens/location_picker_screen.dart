@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
 
 import '../services/location_service.dart';
 
@@ -24,11 +23,7 @@ class LocationPickerScreen extends StatefulWidget {
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  static const String _googlePlacesApiKey =
-      'AIzaSyCjf0K9nQ94IhqeVPt-SgiQGsImZ74D3cs';
-  static const String _androidPackageName = 'com.example.quickdrop';
-  static const String _androidCertSha1 =
-      'BC:95:A8:E8:91:B2:62:01:15:BE:67:D8:DB:EE:C4:26:30:0E:E8:34';
+  static const MethodChannel _placesChannel = MethodChannel('quickdrop/places');
   static const CameraPosition _fallbackCameraPosition = CameraPosition(
     target: LatLng(23.8315, 91.2868),
     zoom: 14,
@@ -48,7 +43,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   bool _isLoadingSuggestions = false;
   String? _errorMessage;
   List<_PlaceSuggestion> _suggestions = <_PlaceSuggestion>[];
-  String _placesSessionToken = DateTime.now().microsecondsSinceEpoch.toString();
 
   @override
   void initState() {
@@ -116,17 +110,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       return;
     }
     _lastDispatchedQuery = trimmed;
+    _autocompleteRequestCount += 1;
+    final requestId = _autocompleteRequestCount;
 
     debugPrint('QuickDropPlaces Search text: "$trimmed"');
-    unawaited(_fetchPlaceSuggestions(trimmed));
-  }
-
-  Future<void> _fetchPlaceSuggestions(String query) async {
-    if (query.isEmpty) {
-      if (!mounted) {
-        return;
-      }
-
+    if (trimmed.isEmpty) {
       setState(() {
         _suggestions = <_PlaceSuggestion>[];
         _isLoadingSuggestions = false;
@@ -135,58 +123,30 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
 
     setState(() {
+      _suggestions = <_PlaceSuggestion>[];
       _isLoadingSuggestions = true;
     });
+    unawaited(_fetchPlaceSuggestions(trimmed, requestId));
+  }
 
+  Future<void> _fetchPlaceSuggestions(String query, int requestId) async {
     try {
-      _autocompleteRequestCount += 1;
-      final requestId = _autocompleteRequestCount;
-
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/autocomplete/json',
-        <String, String>{
-          'input': query,
-          'key': _googlePlacesApiKey,
-          'sessiontoken': _placesSessionToken,
-          'components': 'country:in',
-        },
+      final predictions = await _placesChannel.invokeListMethod<dynamic>(
+        'autocomplete',
+        <String, dynamic>{'query': query},
       );
-
-      const requestHeaders = <String, String>{
-        'X-Android-Package': _androidPackageName,
-        'X-Android-Cert': _androidCertSha1,
-      };
-
-      final response = await http.get(uri, headers: requestHeaders);
-      debugPrint('QuickDropPlaces Request #$requestId URL: $uri');
-      debugPrint('QuickDropPlaces Request #$requestId headers: $requestHeaders');
-      debugPrint('QuickDropPlaces Request #$requestId status: ${response.statusCode}');
-      debugPrint('QuickDropPlaces Request #$requestId response: ${response.body}');
-      if (response.statusCode != 200) {
-        throw Exception('Search failed (${response.statusCode})');
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final status = decoded['status']?.toString() ?? '';
-      if (status != 'OK' && status != 'ZERO_RESULTS') {
-        final message = decoded['error_message']?.toString();
-        throw Exception(message ?? 'Places API error: $status');
-      }
-
-      final predictions = (decoded['predictions'] as List<dynamic>? ?? <dynamic>[])
-          .cast<Map<String, dynamic>>();
-      final suggestions = predictions
+      final suggestions = (predictions ?? const <dynamic>[])
+          .whereType<Map<dynamic, dynamic>>()
           .map(
             (prediction) => _PlaceSuggestion(
-              placeId: prediction['place_id']?.toString() ?? '',
+              placeId: prediction['placeId']?.toString() ?? '',
               description: prediction['description']?.toString() ?? '',
             ),
           )
           .where((suggestion) => suggestion.placeId.isNotEmpty)
           .toList(growable: false);
 
-      if (!mounted) {
+      if (!mounted || requestId != _autocompleteRequestCount) {
         return;
       }
 
@@ -202,7 +162,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         error: error,
         stackTrace: stackTrace,
       );
-      if (!mounted) {
+      if (!mounted || requestId != _autocompleteRequestCount) {
         return;
       }
 
@@ -221,32 +181,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     });
 
     try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/details/json',
-        <String, String>{
-          'place_id': suggestion.placeId,
-          'fields': 'geometry',
-          'key': _googlePlacesApiKey,
-          'sessiontoken': _placesSessionToken,
-        },
+      final location = await _placesChannel.invokeMapMethod<String, dynamic>(
+        'placeDetails',
+        <String, dynamic>{'placeId': suggestion.placeId},
       );
-
-      final response = await http.get(uri);
-      if (response.statusCode != 200) {
-        throw Exception('Location lookup failed (${response.statusCode})');
+      if (location == null) {
+        throw Exception('Location lookup returned no coordinates.');
       }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final status = decoded['status']?.toString() ?? '';
-      if (status != 'OK') {
-        final message = decoded['error_message']?.toString();
-        throw Exception(message ?? 'Place details error: $status');
-      }
-
-      final location =
-          ((decoded['result'] as Map<String, dynamic>)['geometry'] as Map<String, dynamic>)['location']
-              as Map<String, dynamic>;
 
       final lat = (location['lat'] as num).toDouble();
       final lng = (location['lng'] as num).toDouble();
@@ -258,7 +199,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
       setState(() {
         _selectedLatLng = selected;
-        _placesSessionToken = DateTime.now().microsecondsSinceEpoch.toString();
       });
 
       await _mapController?.animateCamera(

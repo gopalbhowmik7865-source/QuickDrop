@@ -21,10 +21,7 @@ const List<String> vegetableSubcategories = [
   'Cut & Packed',
 ];
 
-const List<String> fruitSubcategories = [
-  'Fresh Fruits',
-  'Cut & Packed',
-];
+const List<String> fruitSubcategories = ['Fresh Fruits', 'Cut & Packed'];
 
 const List<String> foodSubcategories = [
   'Pizza',
@@ -106,12 +103,7 @@ const Map<String, List<String>> categorySubcategoryMap = {
 };
 
 const Map<String, List<String>> subcategoryChildCategoryMap = {
-  'Atta, Rice & Dal': [
-    'Atta',
-    'Rice',
-    'Dal',
-    'Flours',
-  ],
+  'Atta, Rice & Dal': ['Atta', 'Rice', 'Dal', 'Flours'],
   'Oil, Ghee & Masala': [
     'Cooking Oils',
     'Ghee',
@@ -130,23 +122,14 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Seasonal Vegetables',
     'Other Vegetables',
   ],
-  'Leafy Greens': [
-    'Spinach',
-    'Coriander',
-    'Fenugreek',
-    'Other Leafy Greens',
-  ],
+  'Leafy Greens': ['Spinach', 'Coriander', 'Fenugreek', 'Other Leafy Greens'],
   'Fresh Fruits': [
     'Seasonal Fruits',
     'Citrus Fruits',
     'Tropical Fruits',
     'Other Fruits',
   ],
-  'Cut & Packed': [
-    'Cut Fruits',
-    'Cut Vegetables',
-    'Mixed Packs',
-  ],
+  'Cut & Packed': ['Cut Fruits', 'Cut Vegetables', 'Mixed Packs'],
   'Dairy, Bread & Eggs': [
     'Milk',
     'Bread & Pav',
@@ -171,24 +154,14 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Lassi & Milkshakes',
     'Cream & Whitener',
   ],
-  'Bakery & Biscuits': [
-    'Biscuits',
-    'Cookies',
-    'Cakes & Pastries',
-    'Breads',
-  ],
+  'Bakery & Biscuits': ['Biscuits', 'Cookies', 'Cakes & Pastries', 'Breads'],
   'Dry Fruits & Cereals': [
     'Dry Fruits',
     'Nuts & Seeds',
     'Breakfast Cereals',
     'Muesli & Oats',
   ],
-  'Chicken, Meat & Fish': [
-    'Chicken',
-    'Mutton',
-    'Fish',
-    'Ready to Cook',
-  ],
+  'Chicken, Meat & Fish': ['Chicken', 'Mutton', 'Fish', 'Ready to Cook'],
   'Kitchenware': [
     'Cookware',
     'Storage Containers',
@@ -213,12 +186,7 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Energy Drinks',
     'Flavored Water',
   ],
-  'Tea, Coffee & Milk': [
-    'Tea',
-    'Coffee',
-    'Milk Drinks',
-    'Premixes',
-  ],
+  'Tea, Coffee & Milk': ['Tea', 'Coffee', 'Milk Drinks', 'Premixes'],
   'Instant Food': [
     'Noodles & Pasta',
     'Ready Meals',
@@ -231,66 +199,21 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Jams & Spreads',
     'Dips',
   ],
-  'Ice Creams': [
-    'Cups & Cones',
-    'Family Packs',
-    'Kulfi',
-    'Frozen Desserts',
-  ],
-  'Restaurant Food': [
-    'North Indian',
-    'South Indian',
-    'Combo Meals',
-    'Thali',
-  ],
-  'Fast Food': [
-    'Burgers',
-    'Fries',
-    'Sandwiches',
-    'Wraps',
-  ],
-  'Pizza': [
-    'Veg Pizza',
-    'Non-Veg Pizza',
-    'Cheese Burst',
-    'Pizza Combos',
-  ],
-  'Burger': [
-    'Veg Burger',
-    'Chicken Burger',
-    'Double Patty',
-    'Burger Combos',
-  ],
+  'Ice Creams': ['Cups & Cones', 'Family Packs', 'Kulfi', 'Frozen Desserts'],
+  'Restaurant Food': ['North Indian', 'South Indian', 'Combo Meals', 'Thali'],
+  'Fast Food': ['Burgers', 'Fries', 'Sandwiches', 'Wraps'],
+  'Pizza': ['Veg Pizza', 'Non-Veg Pizza', 'Cheese Burst', 'Pizza Combos'],
+  'Burger': ['Veg Burger', 'Chicken Burger', 'Double Patty', 'Burger Combos'],
   'Biryani': [
     'Chicken Biryani',
     'Mutton Biryani',
     'Veg Biryani',
     'Family Packs',
   ],
-  'Chinese': [
-    'Noodles',
-    'Fried Rice',
-    'Manchurian',
-    'Combo Boxes',
-  ],
-  'Rolls': [
-    'Egg Rolls',
-    'Chicken Rolls',
-    'Paneer Rolls',
-    'Kathi Rolls',
-  ],
-  'Beverages': [
-    'Cold Beverages',
-    'Hot Beverages',
-    'Shakes',
-    'Mocktails',
-  ],
-  'Sweets': [
-    'Rasgulla',
-    'Gulab Jamun',
-    'Kheer',
-    'Halwa',
-  ],
+  'Chinese': ['Noodles', 'Fried Rice', 'Manchurian', 'Combo Boxes'],
+  'Rolls': ['Egg Rolls', 'Chicken Rolls', 'Paneer Rolls', 'Kathi Rolls'],
+  'Beverages': ['Cold Beverages', 'Hot Beverages', 'Shakes', 'Mocktails'],
+  'Sweets': ['Rasgulla', 'Gulab Jamun', 'Kheer', 'Halwa'],
   'Birthday': [
     'Birthday Cakes',
     'Birthday Flowers',
@@ -303,18 +226,8 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Romantic Gift Sets',
     'Custom Keepsakes',
   ],
-  'Flowers': [
-    'Roses',
-    'Mixed Bouquets',
-    'Orchids',
-    'Flower Baskets',
-  ],
-  'Teddy': [
-    'Small Teddy',
-    'Medium Teddy',
-    'Large Teddy',
-    'Teddy Combos',
-  ],
+  'Flowers': ['Roses', 'Mixed Bouquets', 'Orchids', 'Flower Baskets'],
+  'Teddy': ['Small Teddy', 'Medium Teddy', 'Large Teddy', 'Teddy Combos'],
   'Cakes': [
     'Eggless Cakes',
     'Chocolate Cakes',
@@ -351,42 +264,17 @@ const Map<String, List<String>> subcategoryChildCategoryMap = {
     'Birthday Surprise',
     'Custom Surprise',
   ],
-  'Bath & Body': [
-    'Body Wash',
-    'Soaps',
-    'Body Lotion',
-    'Body Scrub',
-  ],
-  'Hair Care': [
-    'Shampoo',
-    'Conditioner',
-    'Hair Oil',
-    'Hair Serum',
-  ],
-  'Skin Care': [
-    'Face Wash',
-    'Moisturizer',
-    'Sunscreen',
-    'Face Masks',
-  ],
-  'Cosmetics': [
-    'Lipsticks',
-    'Foundations',
-    'Kajal & Eyeliner',
-    'Makeup Kits',
-  ],
+  'Bath & Body': ['Body Wash', 'Soaps', 'Body Lotion', 'Body Scrub'],
+  'Hair Care': ['Shampoo', 'Conditioner', 'Hair Oil', 'Hair Serum'],
+  'Skin Care': ['Face Wash', 'Moisturizer', 'Sunscreen', 'Face Masks'],
+  'Cosmetics': ['Lipsticks', 'Foundations', 'Kajal & Eyeliner', 'Makeup Kits'],
   'Beauty Products': [
     'Makeup',
     'Skincare Essentials',
     'Fragrances',
     'Nail Care',
   ],
-  'Baby Care': [
-    'Baby Lotion',
-    'Baby Powder',
-    'Baby Wipes',
-    'Baby Shampoo',
-  ],
+  'Baby Care': ['Baby Lotion', 'Baby Powder', 'Baby Wipes', 'Baby Shampoo'],
   'Health': [
     'Supplements',
     'First Aid',
@@ -527,6 +415,18 @@ String normalizeOption(String? value) {
   return normalized.replaceAll(RegExp(r'[^a-z0-9]+'), '');
 }
 
+// Compares canonical forms so casing/spacing/singular variants match, but a
+// product never leaks into a different category via substring matching.
+bool categoryValueMatches(String? rawCategory, String expectedCategory) {
+  final raw = rawCategory?.trim() ?? '';
+  if (raw.isEmpty) {
+    return false;
+  }
+
+  return normalizeOption(canonicalCategory(raw)) ==
+      normalizeOption(canonicalCategory(expectedCategory));
+}
+
 List<String> buildSubcategoryOptions(String category) {
   final canonical = canonicalCategory(category);
   return categorySubcategoryMap[canonical]?.toList() ?? const [];
@@ -545,20 +445,11 @@ List<String> buildSubcategoriesForCategory(
   required String firestoreCategory,
 }) {
   final expectedCategory = canonicalCategory(firestoreCategory);
-  final normalizedExpectedCategory = normalizeOption(expectedCategory);
   final subcategories = <String>[];
   final seen = <String>{};
 
   for (final data in products) {
-    final rawCategory = data['category']?.toString().trim() ?? '';
-    final normalizedRawCategory = normalizeOption(rawCategory);
-    final categoryMatches = normalizedRawCategory.isEmpty
-        ? false
-        : normalizedRawCategory == normalizedExpectedCategory ||
-              normalizedExpectedCategory.contains(normalizedRawCategory) ||
-              normalizedRawCategory.contains(normalizedExpectedCategory);
-
-    if (!categoryMatches) {
+    if (!categoryValueMatches(data['category']?.toString(), expectedCategory)) {
       continue;
     }
 
@@ -587,17 +478,8 @@ bool matchesCategoryAndSubcategory(
   List<String> availableSubcategories = const [],
 }) {
   final expectedCategory = canonicalCategory(firestoreCategory);
-  final rawCategory = data['category']?.toString().trim() ?? '';
-  final normalizedRawCategory = normalizeOption(rawCategory);
-  final normalizedExpectedCategory = normalizeOption(expectedCategory);
 
-  final categoryMatches = normalizedRawCategory.isEmpty
-      ? false
-      : normalizedRawCategory == normalizedExpectedCategory ||
-            normalizedExpectedCategory.contains(normalizedRawCategory) ||
-            normalizedRawCategory.contains(normalizedExpectedCategory);
-
-  if (!categoryMatches) {
+  if (!categoryValueMatches(data['category']?.toString(), expectedCategory)) {
     return false;
   }
 
@@ -626,7 +508,8 @@ bool matchesCategoryAndSubcategory(
     return false;
   }
 
-  final subcategoryMatches = normalizedRawSubcategory == normalizedSelectedSubcategory;
+  final subcategoryMatches =
+      normalizedRawSubcategory == normalizedSelectedSubcategory;
   if (!subcategoryMatches) {
     return false;
   }

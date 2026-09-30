@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'models/profile_models.dart';
 import 'services/profile_firestore_service.dart';
 import 'widgets/profile_common_widgets.dart';
+import 'app_theme.dart';
 
 enum AuthProfileViewMode {
   profile,
@@ -428,9 +429,9 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
 
                             return Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FA),
+                                color: QuickDropColors.mint,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFF8F9FA)),
+                                border: Border.all(color: QuickDropColors.border),
                               ),
                               child: ListTile(
                                 title: Text(
@@ -753,12 +754,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_pageTitle()),
-        backgroundColor: const Color(0xFFFAF7F2),
-        foregroundColor: const Color(0xFF3F3527),
+        backgroundColor: QuickDropColors.background,
+        foregroundColor: QuickDropColors.darkText,
         elevation: 0,
       ),
       body: Container(
-        color: const Color(0xFFFAF7F2),
+        color: QuickDropColors.background,
         child: _isBootstrapping
             ? const Center(child: CircularProgressIndicator())
             : _bootstrapError != null
@@ -768,7 +769,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.cloud_off_outlined, color: const Color(0xFFFFC107), size: 44),
+                          const Icon(Icons.cloud_off_outlined, color: QuickDropColors.primary, size: 44),
                           const SizedBox(height: 10),
                           const Text('Coming Soon', textAlign: TextAlign.center),
                           const SizedBox(height: 10),
@@ -871,20 +872,9 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5E6C8),
+        color: QuickDropColors.primaryLight,
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF6E9CF), Color(0xFFF1DFC0)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF8B7355).withValues(alpha: 0.12),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: QuickDropColors.primary.withValues(alpha: 0.45)),
       ),
       child: Row(
         children: [
@@ -894,7 +884,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
             child: const Icon(
               Icons.person_rounded,
               size: 44,
-              color: Color(0xFF8F6B2E),
+              color: QuickDropColors.darkText,
             ),
           ),
           const SizedBox(width: 12),
@@ -908,7 +898,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
-                    color: Color(0xFF3F3527),
+                    color: QuickDropColors.darkText,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                   ),
@@ -920,7 +910,7 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontFamily: 'Poppins',
-                    color: Color(0xFF7B6A55),
+                    color: QuickDropColors.secondaryText,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
@@ -1278,12 +1268,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F9FA),
+                    color: QuickDropColors.mint,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF8F9FA)),
+                    border: Border.all(color: QuickDropColors.border),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.call_outlined, color: Color(0xFFFFC107)),
+                    leading: const Icon(Icons.call_outlined, color: Colors.black),
                     title: const Text('Phone', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.phone),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1294,12 +1284,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F9FA),
+                    color: QuickDropColors.mint,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF8F9FA)),
+                    border: Border.all(color: QuickDropColors.border),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.chat_outlined, color: Color(0xFFFFC107)),
+                    leading: const Icon(Icons.chat_outlined, color: Colors.black),
                     title: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.whatsapp),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1310,12 +1300,12 @@ class _AuthProfilePageState extends State<AuthProfilePage> {
                 Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F9FA),
+                    color: QuickDropColors.mint,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF8F9FA)),
+                    border: Border.all(color: QuickDropColors.border),
                   ),
                   child: ListTile(
-                    leading: const Icon(Icons.email_outlined, color: Color(0xFFFFC107)),
+                    leading: const Icon(Icons.email_outlined, color: Colors.black),
                     title: const Text('Email', style: TextStyle(fontWeight: FontWeight.w700)),
                     subtitle: Text(support.email),
                     trailing: const Icon(Icons.open_in_new, size: 18),
@@ -1420,7 +1410,7 @@ class AppContentPage extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF8F9FA), Color(0xFFF8FBFF), Colors.white],
+            colors: [QuickDropColors.primaryLight, QuickDropColors.mint, QuickDropColors.background],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -1468,7 +1458,7 @@ class AppContentPage extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFF8F9FA)),
+                    border: Border.all(color: QuickDropColors.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

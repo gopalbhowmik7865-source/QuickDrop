@@ -63,11 +63,15 @@ const List<String> electronicsSubcategories = [
 ];
 
 const List<String> householdSubcategories = [
-  'Cleaning',
-  'Laundry',
+  'Cleaning & Laundry',
   'Kitchen Essentials',
-  'Home Decor',
-  'Storage',
+  'Bathroom Essentials',
+  'Storage & Organizers',
+  'Cleaning Tools',
+  'Tissue & Paper Products',
+  'Garbage Bags',
+  'Mosquito & Pest Control',
+  'Home Utility',
 ];
 
 const List<String> petSubcategories = [
@@ -94,6 +98,21 @@ const List<String> printSubcategories = [
   'Banners',
 ];
 
+const List<String> pujaSubcategories = [
+  'Puja Essentials',
+  'Incense & Dhoop',
+  'Diyas & Candles',
+  'Puja Flowers',
+  'Puja Utensils',
+  'Prasad & Bhog Items',
+  'Festival Specials',
+];
+
+const List<String> fishAndMeatSubcategories = [
+  'Fish',
+  'Chicken',
+];
+
 const Map<String, List<String>> categorySubcategoryMap = {
   'Grocery': grocerySubcategories,
   'Vegetables': vegetableSubcategories,
@@ -103,6 +122,9 @@ const Map<String, List<String>> categorySubcategoryMap = {
   'Gifts & Surprises': ['Surprise your loved ones'],
   'Cosmetics': beautySubcategories,
   'Electronics': electronicsSubcategories,
+  'Household Essentials': householdSubcategories,
+  'Puja Items': pujaSubcategories,
+  'Fish & Meat': fishAndMeatSubcategories,
 };
 
 const Map<String, List<String>> subcategoryChildCategoryMap = {

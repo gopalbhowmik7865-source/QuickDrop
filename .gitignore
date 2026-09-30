@@ -43,3 +43,16 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local / generated files
+.tool-appdata/
+android/build/
+firestore-rules-tests/node_modules/
+
+# Android signing key
+quickdrop-release-key.jks
+
+# Security/migration dry-run outputs
+functions/*-dry-run.json
+functions/public-catalog-apply.json
+functions/public-catalog-postapply-verify.json

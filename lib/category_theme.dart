@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class CategoryTheme {
   const CategoryTheme({
@@ -39,48 +40,48 @@ class CategoryTheme {
 }
 
 const groceryCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.primaryLight,
 );
 const vegetablesCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.lightGreen,
 );
 const fruitsCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.mint,
 );
 const foodCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.beige,
 );
 const giftsCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.primaryLight,
 );
 const giftsSurprisesCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.beige,
 );
 const cosmeticsCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.mint,
 );
 const electronicsCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.beige,
 );
 const homeServiceCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.primaryLight,
 );
 const parcelDeliveryCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.mint,
 );
 const fallbackCategoryTheme = CategoryTheme(
-  primary: Color(0xFF2E7D32),
-  background: Color(0xFFF8F9FA),
+  primary: QuickDropColors.primary,
+  background: QuickDropColors.mint,
 );
 
 const defaultCategoryThemes = <String, CategoryTheme>{

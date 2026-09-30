@@ -45,6 +45,32 @@ void main() {
       );
     });
 
+    test('legacy ownership accepts only the ownerPhone field', () {
+      expect(
+        orderMatchesVerifiedOwnerPhone(
+          {'ownerPhone': '9999999999'},
+          '+919999999999',
+        ),
+        isTrue,
+      );
+
+      expect(
+        orderMatchesVerifiedOwnerPhone(
+          {'phoneNumber': '+919999999999'},
+          '+919999999999',
+        ),
+        isFalse,
+      );
+
+      expect(
+        orderMatchesVerifiedOwnerPhone(
+          {'ownerPhone': '+919888888888'},
+          '+919999999999',
+        ),
+        isFalse,
+      );
+    });
+
     test('falls back to showing products when category filters produce no matches', () {
       final docs = [
         {'name': 'Milk', 'category': 'Grocery'},

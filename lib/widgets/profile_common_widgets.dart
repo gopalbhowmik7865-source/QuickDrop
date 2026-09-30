@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_theme.dart';
 
 class ProfileSectionCard extends StatelessWidget {
   const ProfileSectionCard({
@@ -23,10 +24,10 @@ class ProfileSectionCard extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: const Color(0xFFF6EBDD),
+          color: QuickDropColors.primaryLight,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, size: 18, color: const Color(0xFFB0893C)),
+        child: Icon(icon, size: 18, color: QuickDropColors.darkText),
       ),
       const SizedBox(width: 10),
       Expanded(
@@ -38,7 +39,7 @@ class ProfileSectionCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
-                color: Color(0xFF3F3527),
+                color: QuickDropColors.darkText,
               ),
             ),
             if (subtitle != null && subtitle!.isNotEmpty)
@@ -46,7 +47,7 @@ class ProfileSectionCard extends StatelessWidget {
                 subtitle!,
                 style: const TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF7B6A55),
+                  color: QuickDropColors.secondaryText,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -63,16 +64,9 @@ class ProfileSectionCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFF1E6D6)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF8B7355).withValues(alpha: 0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        color: QuickDropColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: QuickDropColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -104,13 +98,13 @@ class ProfileInfoRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCF8F2),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF0E4D2)),
+        color: QuickDropColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: QuickDropColors.border),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFFB0893C), size: 18),
+          Icon(icon, color: QuickDropColors.primaryDark, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -120,7 +114,7 @@ class ProfileInfoRow extends StatelessWidget {
                   label,
                   style: const TextStyle(
                     fontSize: 11,
-                    color: Color(0xFF8B7B66),
+                    color: QuickDropColors.secondaryText,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -129,7 +123,7 @@ class ProfileInfoRow extends StatelessWidget {
                   value,
                   style: const TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF3F3527),
+                    color: QuickDropColors.darkText,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -158,19 +152,19 @@ class EmptyStateCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCF8F2),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF0E4D2)),
+        color: QuickDropColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: QuickDropColors.border),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFFB0893C)),
+          Icon(icon, color: QuickDropColors.primaryDark),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
               style: const TextStyle(
-                color: Color(0xFF7B6A55),
+                color: QuickDropColors.secondaryText,
                 fontWeight: FontWeight.w600,
               ),
             ),

@@ -38,6 +38,21 @@ bool orderMatchesSessionPhone(Map<String, dynamic> data, String sessionPhone) {
   });
 }
 
+/// Legacy-only ownership check for orders created before `ownerUid` was
+/// consistently present. Unlike contact details, `ownerPhone` is the order's
+/// ownership field and may be compared to Firebase's verified phone number.
+bool orderMatchesVerifiedOwnerPhone(
+  Map<String, dynamic> data,
+  String? verifiedPhone,
+) {
+  final normalizedVerified = normalizePhoneValue(verifiedPhone);
+  final normalizedOwner = normalizePhoneValue(
+    data['ownerPhone']?.toString(),
+  );
+  return normalizedVerified.isNotEmpty &&
+      normalizedOwner == normalizedVerified;
+}
+
 bool shouldUseFallbackProducts(
   Iterable<Map<String, dynamic>> docs, {
   required String firestoreCategory,

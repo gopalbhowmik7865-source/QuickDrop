@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'auth_service.dart';
+import 'app_theme.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -66,8 +67,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
-        backgroundColor: const Color(0xFFFFC107),
-        foregroundColor: Colors.white,
+        backgroundColor: QuickDropColors.background,
+        foregroundColor: QuickDropColors.darkText,
       ),
       body: FutureBuilder<String?>(
         future: _phoneFuture,
@@ -86,7 +87,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey,
+                      color: QuickDropColors.secondaryText,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -110,7 +111,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 15,
-                        color: Colors.grey,
+                        color: QuickDropColors.secondaryText,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -164,8 +165,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: QuickDropColors.border),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,12 +175,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF8F9FA),
+                            color: QuickDropColors.mint,
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Icon(
                             _iconFromKind(kind),
-                            color: const Color(0xFFFFC107),
+                            color: QuickDropColors.primaryDark,
                             size: 20,
                           ),
                         ),
@@ -195,7 +196,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF111827),
+                                  color: QuickDropColors.text,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -206,7 +207,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 style: const TextStyle(
                                   fontSize: 13,
                                   height: 1.3,
-                                  color: Color(0xFF4B5563),
+                                  color: QuickDropColors.secondaryText,
                                 ),
                               ),
                               const SizedBox(height: 8),
@@ -215,7 +216,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF6B7280),
+                                  color: QuickDropColors.secondaryText,
                                 ),
                               ),
                             ],

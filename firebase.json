@@ -4,7 +4,7 @@
       "android": {
         "default": {
           "projectId": "quickdrop-cbf49",
-          "appId": "1:384305289905:android:aed26de6ccdae55fad6090",
+          "appId": "1:384305289905:android:67d42d6c8da9fce1ad6090",
           "fileOutput": "android/app/google-services.json"
         }
       },
@@ -12,7 +12,7 @@
         "lib/firebase_options.dart": {
           "projectId": "quickdrop-cbf49",
           "configurations": {
-            "android": "1:384305289905:android:aed26de6ccdae55fad6090",
+            "android": "1:384305289905:android:67d42d6c8da9fce1ad6090",
             "ios": "1:384305289905:ios:97d42431b9517248ad6090",
             "macos": "1:384305289905:ios:97d42431b9517248ad6090",
             "web": "1:384305289905:web:6c43567166b13ad6ad6090",
@@ -26,7 +26,8 @@
     "source": "functions"
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "hosting": {
     "public": "build/web",
